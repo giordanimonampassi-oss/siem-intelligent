@@ -1,0 +1,168 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root,
+:root[data-theme='dark'] {
+  --bg: #0b1016;
+  --surface: #111820;
+  --surface-2: #171e28;
+  --surface-3: #222933;
+  --border: #303946;
+  --text: #c7ceda;
+  --muted: #8993a3;
+  --heading: #edf1f7;
+  --accent: #3ddbcf;
+  --accent-2: #9bc6ff;
+  --critical: #ff5a52;
+  --critical-soft: rgba(255, 90, 82, 0.14);
+  --warning: #ffb72e;
+  --warning-soft: rgba(255, 183, 46, 0.15);
+  --info: #8ebeff;
+  --success: #37d6bf;
+  --shadow: 0 20px 55px rgba(0, 0, 0, 0.32);
+  --auth-page-bg:
+    radial-gradient(circle at 70% 16%, rgba(61, 219, 207, 0.13), transparent 26rem),
+    linear-gradient(180deg, #091017 0%, #0d131a 52%, #0b1016 100%);
+  --auth-status-bg:
+    radial-gradient(circle at 50% 40%, rgba(61, 219, 207, 0.12), transparent 26rem),
+    #0b1612;
+  --auth-nav-bg: rgba(8, 13, 20, 0.82);
+  --auth-nav-border: rgba(69, 86, 104, 0.32);
+  --auth-panel-bg: rgba(8, 14, 21, 0.58);
+  --auth-panel-border: rgba(69, 86, 104, 0.28);
+  --auth-card-bg: rgba(15, 23, 33, 0.92);
+  --auth-card-border: rgba(69, 86, 104, 0.42);
+  --auth-card-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+  --auth-input-bg: #09131d;
+  --auth-input-text: #e5edf5;
+  --auth-input-border: rgba(76, 96, 117, 0.6);
+  --auth-input-icon: #667485;
+  --auth-surface-soft: rgba(19, 28, 37, 0.85);
+  --auth-surface-muted: rgba(19, 28, 37, 0.82);
+  --auth-footer-bg: rgba(8, 13, 20, 0.62);
+  --auth-accent-soft: rgba(61, 219, 207, 0.1);
+  --auth-accent-border: rgba(61, 219, 207, 0.24);
+  --auth-accent-glow: rgba(61, 219, 207, 0.12);
+  --auth-hero-bg: linear-gradient(180deg, #101923, #0b1118);
+  --auth-hero-border: rgba(61, 219, 207, 0.22);
+  --auth-hero-badge-bg: #101923;
+  --auth-qr-bg: #f5f8fb;
+  --auth-qr-pattern: #111820;
+  --auth-status-track: rgba(73, 91, 99, 0.8);
+  --auth-avatar-bg: rgba(61, 219, 207, 0.18);
+  --auth-avatar-color: #a8fff5;
+  --auth-shield-bg: #5ff3e5;
+  --auth-shield-color: #05221f;
+  --auth-accent-bright: #5ff3e5;
+  --auth-link-muted: #84909f;
+  --auth-check: #7f8c9c;
+  --auth-trusted-ring: #0d131a;
+  --auth-console-overlay: rgba(6, 17, 24, 0.75);
+  --auth-mfa-device-bg: #79aaff;
+  --auth-mfa-device-color: #05221f;
+  --auth-proof-strong: #79aaff;
+  --auth-section-border: rgba(69, 86, 104, 0.28);
+  --auth-feature-border: rgba(69, 86, 104, 0.35);
+}
+
+:root[data-theme='light'] {
+  --bg: #eef3f8;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --surface-3: #e8edf4;
+  --border: #cad3df;
+  --text: #3d4654;
+  --muted: #6d7787;
+  --heading: #111827;
+  --accent: #0fafa1;
+  --accent-2: #256fc6;
+  --critical: #d53b35;
+  --critical-soft: rgba(213, 59, 53, 0.1);
+  --warning: #b77900;
+  --warning-soft: rgba(183, 121, 0, 0.12);
+  --info: #256fc6;
+  --success: #088f7f;
+  --shadow: 0 18px 45px rgba(40, 56, 74, 0.12);
+  --auth-page-bg:
+    radial-gradient(circle at 70% 16%, rgba(15, 175, 161, 0.14), transparent 26rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef3f8 52%, #e8eef5 100%);
+  --auth-status-bg:
+    radial-gradient(circle at 50% 40%, rgba(15, 175, 161, 0.1), transparent 26rem),
+    #eef3f8;
+  --auth-nav-bg: rgba(255, 255, 255, 0.92);
+  --auth-nav-border: rgba(202, 211, 223, 0.85);
+  --auth-panel-bg: rgba(246, 248, 251, 0.92);
+  --auth-panel-border: #cad3df;
+  --auth-card-bg: rgba(255, 255, 255, 0.98);
+  --auth-card-border: #cad3df;
+  --auth-card-shadow: 0 18px 45px rgba(40, 56, 74, 0.1);
+  --auth-input-bg: #ffffff;
+  --auth-input-text: #111827;
+  --auth-input-border: #cad3df;
+  --auth-input-icon: #6d7787;
+  --auth-surface-soft: rgba(255, 255, 255, 0.95);
+  --auth-surface-muted: rgba(246, 248, 251, 0.95);
+  --auth-footer-bg: rgba(255, 255, 255, 0.88);
+  --auth-accent-soft: rgba(15, 175, 161, 0.1);
+  --auth-accent-border: rgba(15, 175, 161, 0.28);
+  --auth-accent-glow: rgba(15, 175, 161, 0.08);
+  --auth-hero-bg: linear-gradient(180deg, #ffffff, #f6f8fb);
+  --auth-hero-border: rgba(15, 175, 161, 0.22);
+  --auth-hero-badge-bg: #ffffff;
+  --auth-qr-bg: #ffffff;
+  --auth-qr-pattern: #111827;
+  --auth-status-track: #cad3df;
+  --auth-avatar-bg: rgba(15, 175, 161, 0.14);
+  --auth-avatar-color: #088f7f;
+  --auth-shield-bg: #0fafa1;
+  --auth-shield-color: #ffffff;
+  --auth-accent-bright: #0fafa1;
+  --auth-link-muted: #6d7787;
+  --auth-check: #6d7787;
+  --auth-trusted-ring: #ffffff;
+  --auth-console-overlay: rgba(232, 237, 244, 0.85);
+  --auth-mfa-device-bg: #256fc6;
+  --auth-mfa-device-color: #ffffff;
+  --auth-proof-strong: #256fc6;
+  --auth-section-border: rgba(202, 211, 223, 0.85);
+  --auth-feature-border: rgba(202, 211, 223, 0.95);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}
