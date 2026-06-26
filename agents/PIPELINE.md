@@ -3,11 +3,11 @@
 Ce document décrit le pipeline complet de mise en place des agents de collecte, de la création des VM jusqu'à l'intégration avec le reste de l'équipe (Backend FastAPI + BDD).
 
 ## Phase 0 — Cadrage
-- [ ] Confirmer le contrat JSON avec le Dev Backend (FastAPI) :
-  - valeurs exactes possibles pour `log_type`
-  - valeurs exactes possibles pour `severity`
-  - format du timestamp (ISO 8601 UTC)
-  - comportement attendu pour les champs manquants (`null` explicite vs champ omis)
+- [x] Confirmer le contrat JSON avec le Dev Backend (FastAPI) :
+  - `log_type` : `auth`, `web`, `network`, `system`
+  - `severity` : `info`, `warning`, `high`, `critical`
+  - `timestamp` : ISO 8601 UTC (`Z`)
+  - champs manquants : `null` explicite (jamais de champ omis)
 
 ## Phase 1 — Environnement VM
 - [ ] Installer VirtualBox + ISO Ubuntu Server 22.04 LTS
