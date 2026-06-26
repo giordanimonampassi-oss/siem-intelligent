@@ -1,0 +1,45 @@
+# === Python / Environnements Virtuels ===
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Environnements virtuels locaux
+backend/siem/
+.venv/
+venv/
+ENV/
+env/
+siem/
+
+# === Configuration & Secrets (TRÈS IMPORTANT) ===
+.env
+.env.*
+!.env.example
+*.json
+!secrets.example.json
+
+# === Éditeurs de code ===
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# === Docker & Bases de données ===
+# Ignore les dossiers de données persistantes si vous les avez mappés localement
+docker/pg_data/
+docker/es_data/
+.docker/
+
+# === OS ===
+Thumbs.db
+Ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
