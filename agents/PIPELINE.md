@@ -16,13 +16,13 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Créer la VM `CTU-AUTH` (2 Go RAM, 10 Go disque, 2 CPU — ajusté depuis 512 Mo/1 CPU, freeze de l'installeur Subiquity sous-dimensionné)
 - [x] Configurer le réseau Host-Only (NIC1 NAT + NIC2 Host-Only sur `VirtualBox Host-Only Ethernet Adapter`, IP fixe `192.168.6.10/24` via Netplan)
 - [x] Vérifier la connectivité (ping VM ↔ hôte `192.168.6.1` — OK)
-- [ ] Cloner la VM (clone lié) pour créer `CTU-WEB`
+- [x] Cloner la VM (clone lié, via snapshot `base`) pour créer `CTU-WEB` — IP `192.168.6.11/24`, hostname `ctu-web`
 
 ## Phase 2 — Services générateurs de logs réels
 
-- [ ] Installer/configurer OpenSSH sur `CTU-AUTH` → génère `/var/log/auth.log`
+- [x] Installer/configurer OpenSSH sur `CTU-AUTH` → génère `/var/log/auth.log` (service activé via `systemctl enable --now ssh`)
 - [ ] Installer/configurer Apache2 sur `CTU-WEB` → génère `/var/log/apache2/access.log` + `error.log`
-- [ ] Provoquer manuellement quelques événements (échecs SSH, requêtes HTTP) pour valider le format réel des logs
+- [x] Provoquer manuellement quelques événements (échecs SSH répétés depuis l'hôte) → `Invalid user` / `Failed password` confirmés dans `auth.log`
 
 ## Phase 3 — Agent de collecte (Python custom)
 
