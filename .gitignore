@@ -1,6 +1,40 @@
-id_equipement INTEGER   NOT NULL REFERENCES equipement(id) ON DELETE CASCADE
+# ====================================================================
+# CONFIGURATION GITIGNORE - SIEM INTELLIGENT (PROJET DE GROUPE)
+# ====================================================================
 
-# Python
+# --- SECRETS & CONFIGURATION INDIVIDUELLE (À NE JAMAIS EMBARQUER) ---
+.env
+.env.local
+.env.*.local
+*.env
+backend/.env
+
+# --- VOLUMES DE BASES DE DONNÉES LOCAUX ---
+postgres_data/
+elastic_data/
+database_data/
+*.db
+*.sqlite3
+
+# --- BACKEND PYTHON (CACHES ET SÉCURITÉ DE L'ÉQUIPE) ---
 __pycache__/
 *.pyc
-*.jsonl
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# --- FRONTEND (NODE / REACT / VUE) ---
+frontend/node_modules/
+node_modules/
+frontend/dist/
+frontend/build/
+*.log
+
+# --- CONFIGURATIONS ÉDITEURS & SYSTÈME ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
