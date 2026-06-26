@@ -1,121 +1,117 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Sidebar } from './components/Sidebar'
-import { Topbar } from './components/Topbar'
-import { AuthLoading } from './pages/AuthLoading'
-import { Dashboard } from './pages/Dashboard'
-import { LiveAlerts } from './pages/LiveAlerts'
-import { LogSearch } from './pages/LogSearch'
-import { Incidents } from './pages/Incidents'
-import { Landing } from './pages/Landing'
-import { Login } from './pages/Login'
-import { MfaVerification } from './pages/MfaVerification'
-import { Register } from './pages/Register'
-import { SoarPlaybooks } from './pages/SoarPlaybooks'
-import { UebaProfiles } from './pages/UebaProfiles'
-import { Settings } from './pages/Settings'
-import { Profile } from './pages/Profile'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import { Sidebar }          from './components/Sidebar'
+import { Topbar }           from './components/Topbar'
+import { AuthLoading }      from './pages/AuthLoading'
+import { Dashboard }        from './pages/Dashboard'
+import { LiveAlerts }       from './pages/LiveAlerts'
+import { LogSearch }        from './pages/LogSearch'
+import { Incidents }        from './pages/Incidents'
+import { Landing }          from './pages/Landing'
+import { Login }            from './pages/Login'
+import { MfaVerification }  from './pages/MfaVerification'
+import { MfaSetup }         from './pages/MfaSetup'
+import { Register }         from './pages/Register'
+import { SoarPlaybooks }    from './pages/SoarPlaybooks'
+import { UebaProfiles }     from './pages/UebaProfiles'
+import { Settings }         from './pages/Settings'
+import { Profile }          from './pages/Profile'
 import './App.css'
 
-const pages = {
+const PAGES = {
   dashboard: Dashboard,
-  alerts: LiveAlerts,
-  logs: LogSearch,
+  alerts:    LiveAlerts,
+  logs:      LogSearch,
   incidents: Incidents,
-  soar: SoarPlaybooks,
-  ueba: UebaProfiles,
-  settings: Settings,
-  profile: Profile,
+  soar:      SoarPlaybooks,
+  ueba:      UebaProfiles,
+  settings:  Settings,
+  profile:   Profile,
 }
 
 function getInitialTheme() {
-  const savedTheme = localStorage.getItem('smart-siem-theme')
-
-  if (savedTheme) {
-    return savedTheme
-  }
-
-  return window.matchMedia('(prefers-color-scheme: light)').matches
-    ? 'light'
-    : 'dark'
+  const saved = localStorage.getItem('smart-siem-theme')
+  if (saved) return saved
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
-function App() {
-  const [authView, setAuthView] = useState('landing')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [activePage, setActivePage] = useState('dashboard')
-  const [theme, setTheme] = useState(getInitialTheme)
-  const ActivePage = useMemo(() => pages[activePage], [activePage])
+// ── Inner app — accès à AuthContext ──────────────────────────────────────────
+function AppInner() {
+  const { isAuthenticated, authStep, logout } = useAuth()
 
+  const [authView, setAuthView]   = useState('landing')
+  const [activePage, setActivePage] = useState('dashboard')
+  const [theme, setTheme]         = useState(getInitialTheme)
+  const ActivePage = useMemo(() => PAGES[activePage], [activePage])
+
+  // Sync thème
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('smart-siem-theme', theme)
   }, [theme])
 
+  // Quand le login réussit, authStep passe à 'done' → on est connecté
   useEffect(() => {
-    if (authView !== 'loading') {
-      return undefined
+    if (authStep === 'done' && isAuthenticated) {
+      setAuthView('app')
     }
+  }, [authStep, isAuthenticated])
 
-    const timer = window.setTimeout(() => {
-      setAuthView('mfa')
-    }, 1100)
-
-    return () => window.clearTimeout(timer)
+  // Loading → MFA
+  useEffect(() => {
+    if (authView !== 'loading') return
+    const t = setTimeout(() => setAuthView('mfa'), 1100)
+    return () => clearTimeout(t)
   }, [authView])
 
-  function handleAuthSubmit(event) {
-    event.preventDefault()
-    setAuthView('loading')
+  function handleThemeChange() {
+    setTheme(t => t === 'dark' ? 'light' : 'dark')
   }
 
   function handleLogout() {
-    setIsAuthenticated(false)
+    logout()
     setAuthView('login')
     setActivePage('dashboard')
   }
 
-  function handleThemeChange() {
-    setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))
-  }
-
+  // ── Auth screens ──────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     if (authView === 'login') {
       return (
         <Login
           theme={theme}
-          onSubmit={handleAuthSubmit}
           onNavigate={setAuthView}
           onThemeChange={handleThemeChange}
         />
       )
     }
-
     if (authView === 'register') {
       return (
         <Register
           theme={theme}
-          onSubmit={handleAuthSubmit}
+          onSubmit={e => { e.preventDefault(); setAuthView('loading') }}
           onNavigate={setAuthView}
           onThemeChange={handleThemeChange}
         />
       )
     }
-
     if (authView === 'loading') {
       return <AuthLoading theme={theme} onThemeChange={handleThemeChange} />
     }
-
     if (authView === 'mfa') {
       return (
         <MfaVerification
           theme={theme}
-          onVerify={() => setIsAuthenticated(true)}
+          onVerify={() => {}}          // AuthContext gère la connexion
           onNavigate={setAuthView}
           onThemeChange={handleThemeChange}
         />
       )
     }
-
+    if (authView === 'mfa_setup') {
+      return <MfaSetup theme={theme} onThemeChange={handleThemeChange} />
+    }
+    // Landing (défaut)
     return (
       <Landing
         theme={theme}
@@ -125,6 +121,7 @@ function App() {
     )
   }
 
+  // ── App authentifiée ──────────────────────────────────────────────────────
   return (
     <div className="app-shell">
       <Sidebar
@@ -145,4 +142,11 @@ function App() {
   )
 }
 
-export default App
+// ── Root avec Provider ───────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
+  )
+}

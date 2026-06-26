@@ -1,52 +1,72 @@
-import { navigationItems } from '../data/navigation'
+import { useHealth } from '../hooks/useHealth'
+
+const PAGE_LABELS = {
+  dashboard: 'Tableau de bord',
+  alerts:    'Alertes en direct',
+  logs:      'Recherche de logs',
+  incidents: 'Incidents',
+  soar:      'Playbooks SOAR',
+  ueba:      'Profils UEBA',
+  settings:  'Administration',
+  profile:   'Profil',
+}
 
 export function Topbar({ activePage, theme, onNavigate, onThemeChange }) {
-  const currentPage =
-    navigationItems.find((item) => item.id === activePage) ??
-    { label: 'Profil utilisateur' }
+  const { health, allOk } = useHealth()
 
-  function handleSearchKeyDown(event) {
-    if (event.key === 'Enter') {
-      onNavigate('logs')
+  function getStatusLabel() {
+    if (health.api === 'checking') return 'Vérification...'
+    if (!allOk) {
+      const down = Object.entries(health)
+        .filter(([, v]) => v !== 'ok' && v !== 'checking')
+        .map(([k]) => k)
+      return `Dégradé — ${down.join(', ')}`
     }
+    return 'Tous les systèmes opérationnels'
   }
 
+  const statusColor = health.api === 'checking'
+    ? 'var(--warning)'
+    : allOk ? 'var(--success)' : 'var(--critical)'
+
   return (
-    <header className="topbar">
+    <header id="topbar">
       <div className="breadcrumb">
-        <span>SOC</span>
-        <span>/</span>
-        <strong>{currentPage.label}</strong>
+        <span>{PAGE_LABELS[activePage] || activePage}</span>
       </div>
 
-      <label className="global-search">
-        <span>Recherche</span>
+      {/* <div className="topbar-search">
+        <i className="ti ti-search" aria-hidden="true"></i>
         <input
-          placeholder="Rechercher logs, IP, utilisateurs, hôtes..."
-          onKeyDown={handleSearchKeyDown}
+          type="text"
+          placeholder="Rechercher logs, IP, utilisateurs..."
+          onKeyDown={e => { if (e.key === 'Enter') onNavigate('logs') }}
         />
-      </label>
+      </div> */}
 
-      <div className="topbar-actions">
-        <button type="button" className="icon-button" aria-label="Notifications">
-          <i className="bi bi-bell-fill" aria-hidden="true"></i>
-        </button>
+      <div className="topbar-right">
+        {/* Indicateur de santé */}
+        <div className="health" title={`PG:${health.postgresql} | ES:${health.elasticsearch}`}>
+          <div className="health-dot" style={{ background: statusColor, animation: allOk ? undefined : 'none' }}></div>
+          <span style={{ color: statusColor, fontSize: 11 }}>{getStatusLabel()}</span>
+        </div>
+
+        {/* Toggle thème */}
         <button
           type="button"
           className="theme-toggle"
           onClick={onThemeChange}
           aria-label="Basculer le thème"
+          style={{ fontSize: 11, padding: '4px 8px' }}
         >
           <span className={theme === 'dark' ? 'active' : ''}>Sombre</span>
           <span className={theme === 'light' ? 'active' : ''}>Clair</span>
         </button>
-        <button
-          type="button"
-          className={`analyst-card ${activePage === 'profile' ? 'active' : ''}`}
-          onClick={() => onNavigate('profile')}
-        >
-          <strong>Analyste_04</strong>
-          <span>Opérateur niveau 2</span>
+
+        {/* Cloche notifications */}
+        <button className="notif-btn" onClick={() => onNavigate('alerts')}>
+          <i className="ti ti-bell" aria-hidden="true"></i>
+          <span className="notif-badge">!</span>
         </button>
       </div>
     </header>

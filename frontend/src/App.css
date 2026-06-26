@@ -2561,3 +2561,70 @@ pre {
     gap: 6px;
   }
 }
+
+/* ── Ajouts CSS — intégration backend ─────────────────────────────────────── */
+
+/* Spinner pour les états de chargement */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Bannière d'erreur auth */
+.auth-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(248, 81, 73, 0.12);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  border-radius: 6px;
+  color: var(--critical, #F85149);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+/* Bouton ip-link (pivot) */
+.ip-link {
+  background: none;
+  border: none;
+  color: var(--teal, #39D5C1);
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 0;
+  text-decoration: none;
+}
+.ip-link:hover { text-decoration: underline; }
+
+/* View toggle */
+.view-toggle { display: flex; }
+.view-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+}
+.view-btn:first-child { border-radius: 6px 0 0 6px; }
+.view-btn:last-child  { border-radius: 0 6px 6px 0; border-left: none; }
+.view-btn.active {
+  background: var(--teal, #39D5C1);
+  color: #0D1117;
+  border-color: var(--teal, #39D5C1);
+  font-weight: 600;
+}
+
+/* Indicateur santé dégradé */
+.health-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Bouton full-width dans les panneaux */
+.full-width { width: 100%; }
