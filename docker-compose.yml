@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════════
-#  Smart SIEM – Stack Docker
-#  Services : PostgreSQL · Elasticsearch · Python backend (init DB) · pgAdmin
+#  Smart SIEM – Stack Docker Sécurisée (Environnement d'Équipe)
+#  Services : PostgreSQL · Elasticsearch · Python backend · pgAdmin
 # ═══════════════════════════════════════════════════════════════════════════
 
 services:
@@ -11,16 +11,16 @@ services:
     container_name: siem_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-siem_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-siem_password}
-      POSTGRES_DB: ${POSTGRES_DB:-siem_db}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      # Modification ici : routage vers le port 5433 de l'hôte pour éviter le conflit Windows
+      # Routage vers le port 5433 de l'hôte pour éviter le conflit Windows local
       - "0.0.0.0:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-siem_user} -d ${POSTGRES_DB:-siem_db}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -83,8 +83,8 @@ services:
     container_name: siem_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@siem.local}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_password}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
       - "0.0.0.0:5050:80"

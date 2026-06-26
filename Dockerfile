@@ -9,7 +9,7 @@ LABEL description="Service d'initialisation PostgreSQL pour le Smart SIEM CTU"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Répertoire de travail
+# Répertoire de travail dans le conteneur
 WORKDIR /siem
 
 # ── Dépendances système (psycopg2 a besoin de libpq) ────────────────────────
@@ -26,6 +26,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # ── Entrypoint ───────────────────────────────────────────────────────────────
-# Lance le script d'initialisation, puis garde le conteneur actif (ou enchaîne
-# avec votre serveur applicatif en remplaçant la commande tail).
-CMD ["sh", "-c", "python -m database.init_db && echo '✅ DB ready – container staying alive' && tail -f /dev/null"]
+# Exécute proprement le script init_db localisé dans le sous-dossier database,
+# puis garde le conteneur actif pour que tes équipiers puissent s'y connecter.
+CMD ["sh", "-c", "python database/init_db.py && echo '✅ DB ready – container staying alive' && tail -f /dev/null"]
