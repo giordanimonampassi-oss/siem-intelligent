@@ -1,0 +1,24 @@
+# Configuration de l'agent de collecte.
+# Ce fichier est le SEUL endroit a modifier pour deployer l'agent sur une
+# autre machine (CTU-AUTH, CTU-WEB, ...). Le code Python reste identique.
+
+# URL de l'API qui recoit les logs (le mock local en attendant la vraie API FastAPI).
+server_url: "http://192.168.6.1:8000/api/v1/logs"
+
+# Identite de la machine sur laquelle tourne l'agent.
+# Ces valeurs sont mises dans chaque log envoye (champs "host" et "dest_ip").
+host: "ctu-auth"
+dest_ip: "192.168.6.10"
+
+# Liste des fichiers a surveiller, avec le parser a utiliser pour chacun.
+# "parser" doit correspondre a une classe definie dans le dossier parsers/.
+watched_files:
+  - path: "/var/log/auth.log"
+    parser: "auth"
+
+# Resilience reseau : si l'envoi vers server_url echoue, les logs sont
+# stockes ici et renvoyes automatiquement a la prochaine tentative reussie.
+queue_file: "/var/log/siem-agent/queue.jsonl"
+
+# Delai (en secondes) entre deux tentatives de renvoi de la file d'attente.
+retry_interval: 10

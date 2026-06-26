@@ -1,1 +1,6 @@
 id_equipement INTEGER   NOT NULL REFERENCES equipement(id) ON DELETE CASCADE
+
+# Python
+__pycache__/
+*.pyc
+*.jsonl
