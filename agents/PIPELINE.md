@@ -3,6 +3,7 @@
 Ce document décrit le pipeline complet de mise en place des agents de collecte, de la création des VM jusqu'à l'intégration avec le reste de l'équipe (Backend FastAPI + BDD).
 
 ## Phase 0 — Cadrage
+
 - [x] Confirmer le contrat JSON avec le Dev Backend (FastAPI) :
   - `log_type` : `auth`, `web`, `network`, `system`
   - `severity` : `info`, `warning`, `high`, `critical`
@@ -10,18 +11,21 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
   - champs manquants : `null` explicite (jamais de champ omis)
 
 ## Phase 1 — Environnement VM
-- [ ] Installer VirtualBox + ISO Ubuntu Server 22.04 LTS
-- [ ] Créer la VM `CTU-AUTH` (512 Mo RAM, 10 Go disque, 1 CPU)
-- [ ] Configurer le réseau Host-Only (carte NAT + carte Host-Only, IP fixe via Netplan)
-- [ ] Vérifier la connectivité (ping VM ↔ hôte)
+
+- [x] Installer VirtualBox + ISO Ubuntu Live Server 24.04.4 LTS
+- [x] Créer la VM `CTU-AUTH` (2 Go RAM, 10 Go disque, 2 CPU — ajusté depuis 512 Mo/1 CPU, freeze de l'installeur Subiquity sous-dimensionné)
+- [x] Configurer le réseau Host-Only (NIC1 NAT + NIC2 Host-Only sur `VirtualBox Host-Only Ethernet Adapter`, IP fixe `192.168.6.10/24` via Netplan)
+- [x] Vérifier la connectivité (ping VM ↔ hôte `192.168.6.1` — OK)
 - [ ] Cloner la VM (clone lié) pour créer `CTU-WEB`
 
 ## Phase 2 — Services générateurs de logs réels
+
 - [ ] Installer/configurer OpenSSH sur `CTU-AUTH` → génère `/var/log/auth.log`
 - [ ] Installer/configurer Apache2 sur `CTU-WEB` → génère `/var/log/apache2/access.log` + `error.log`
 - [ ] Provoquer manuellement quelques événements (échecs SSH, requêtes HTTP) pour valider le format réel des logs
 
 ## Phase 3 — Agent de collecte (Python custom)
+
 - [ ] Concevoir la structure du script :
   - `CONFIG` — IP du serveur, fichiers à surveiller, nom du host
   - `WATCHER` — surveille les fichiers de logs (watchdog / inotify)
@@ -34,20 +38,24 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [ ] Écrire le parser Cisco simulé (format IOS via Syslog)
 
 ## Phase 4 — Test local sans dépendre du backend réel
+
 - [ ] Créer un mock server local (FastAPI, pour matcher la validation Pydantic réelle) avec endpoint `POST /api/v1/logs`
 - [ ] Pointer l'agent (config externalisée — IP/port modifiable) vers ce mock en local
 - [ ] Lancer le scénario SC-01 (6 échecs SSH) et vérifier que le JSON reçu est conforme au contrat
 
 ## Phase 5 — Déploiement agent sur les VM
+
 - [ ] Copier l'agent sur `CTU-AUTH` et `CTU-WEB`, adapter la config (IP serveur, fichiers surveillés, hostname)
 - [ ] Créer un service `systemd` pour démarrage automatique
 
 ## Phase 6 — Intégration équipe (différée, pas bloquante)
+
 - [ ] Mettre en place le point de convergence (tunnel ngrok/Tailscale ou serveur partagé) quand Backend + BDD seront prêts à recevoir du trafic externe
 - [ ] Reconfigurer l'agent pour pointer vers l'IP réelle (un seul paramètre à changer)
 - [ ] Test d'intégration bout-en-bout (VM → agent → vraie API FastAPI → vraie BDD)
 
 ## Phase 7 — Documentation
+
 - [ ] Rédiger le README technique (reproduction de l'environnement depuis zéro) dans `agents/`
 
 ## Contrat JSON (référence)
@@ -67,6 +75,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 ```
 
 ### Règles de mapping `severity` — auth.log
+
 | Motif dans le log | Severity |
 |---|---|
 | `Failed password for root` | critical |
@@ -78,6 +87,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 | `session opened for user root` | high |
 
 ### Règles de mapping `severity` — Apache access.log
+
 | Code HTTP | Severity |
 |---|---|
 | 2xx | info |
