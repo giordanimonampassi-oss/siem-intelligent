@@ -21,8 +21,8 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 ## Phase 2 — Services générateurs de logs réels
 
 - [x] Installer/configurer OpenSSH sur `CTU-AUTH` → génère `/var/log/auth.log` (service activé via `systemctl enable --now ssh`)
-- [ ] Installer/configurer Apache2 sur `CTU-WEB` → génère `/var/log/apache2/access.log` + `error.log`
-- [x] Provoquer manuellement quelques événements (échecs SSH répétés depuis l'hôte) → `Invalid user` / `Failed password` confirmés dans `auth.log`
+- [x] Installer/configurer Apache2 sur `CTU-WEB` → génère `/var/log/apache2/access.log` + `error.log` (confirmé : `GET / HTTP/1.1 200`)
+- [x] Provoquer manuellement quelques événements : échecs SSH répétés → `Invalid user` / `Failed password` confirmés dans `auth.log` ; requêtes HTTP → `200` et `404` confirmés dans `access.log`
 
 ## Phase 3 — Agent de collecte (Python custom)
 
