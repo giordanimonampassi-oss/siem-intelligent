@@ -39,9 +39,10 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 
 ## Phase 4 — Test local sans dépendre du backend réel
 
-- [ ] Créer un mock server local (FastAPI, pour matcher la validation Pydantic réelle) avec endpoint `POST /api/v1/logs`
-- [ ] Pointer l'agent (config externalisée — IP/port modifiable) vers ce mock en local
-- [ ] Lancer le scénario SC-01 (6 échecs SSH) et vérifier que le JSON reçu est conforme au contrat
+- [x] Créer un mock server local (FastAPI) avec endpoint `POST /api/v1/logs` (`agents/collector/mock_server.py`)
+- [x] Pointer l'agent (config externalisée via `config.yaml`, surchargeable en argument CLI) vers ce mock en local
+- [x] Test de bout en bout : `Invalid user`, `Failed password` (root/non-root), `Accepted password` → JSON reçu conforme au contrat, severity correcte
+- [x] Test de résilience réseau : serveur coupé → log mis en file d'attente locale, sans perte ; serveur relancé → log rejoué automatiquement au prochain cycle (`retry_interval`)
 
 ## Phase 5 — Déploiement agent sur les VM
 
@@ -77,7 +78,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 ### Règles de mapping `severity` — auth.log
 
 | Motif dans le log | Severity |
-|---|---|
+| --- | --- |
 | `Failed password for root` | critical |
 | `Failed password for [user]` | warning |
 | `Invalid user` | warning |
@@ -89,7 +90,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 ### Règles de mapping `severity` — Apache access.log
 
 | Code HTTP | Severity |
-|---|---|
+| --- | --- |
 | 2xx | info |
 | 3xx | info |
 | 4xx | warning |

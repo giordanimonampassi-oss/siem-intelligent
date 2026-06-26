@@ -8,6 +8,7 @@ lance la boucle principale qui :
   3. retente regulierement l'envoi des logs en attente (resilience reseau)
 """
 
+import sys
 import time
 
 from config_loader import charger_config
@@ -26,7 +27,10 @@ PARSEURS_DISPONIBLES = {
 
 
 def main():
-    config = charger_config("config.yaml")
+    # Permet de tester avec un fichier de config different de celui par
+    # defaut (utile pour les tests locaux sans toucher au config.yaml de prod).
+    chemin_config = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    config = charger_config(chemin_config)
     sender = Sender(server_url=config.server_url, queue_file=config.queue_file)
 
     fichiers_et_callbacks = []
