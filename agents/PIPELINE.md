@@ -26,14 +26,14 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 
 ## Phase 3 — Agent de collecte (Python custom)
 
-- [ ] Concevoir la structure du script :
-  - `CONFIG` — IP du serveur, fichiers à surveiller, nom du host
-  - `WATCHER` — surveille les fichiers de logs (watchdog / inotify)
-  - `PARSER` — extrait les champs selon le type de log
-  - `NORMALIZER` — assigne `log_type` et `severity` selon les règles de mapping
-  - `SENDER` — construit le JSON et POST vers l'API
-  - `MAIN` — boucle principale, gestion des erreurs et reconnexion
-- [ ] Écrire le parser `auth.log` (priorité — scénario SC-01 brute force SSH)
+- [x] Concevoir la structure du script (`agents/collector/`) :
+  - `config.yaml` / `config_loader.py` — IP du serveur, fichiers à surveiller, host, dest_ip
+  - `watcher.py` — surveille les fichiers de logs (watchdog)
+  - `parsers/` — `base.py` (interface commune) + un parser par source
+  - `normalizer.py` — assigne `log_type` et `severity` selon les règles de mapping
+  - `sender.py` — construit le JSON, POST vers l'API, file d'attente locale si échec réseau
+  - `agent.py` — point d'entrée, boucle principale
+- [x] Écrire le parser `auth.log` (priorité — scénario SC-01 brute force SSH) — testé en local sur 4 cas réels (Invalid user, Failed password root/non-root, Accepted password), severity correcte dans tous les cas
 - [ ] Écrire le parser Apache (`access.log` / `error.log`)
 - [ ] Écrire le parser Cisco simulé (format IOS via Syslog)
 
