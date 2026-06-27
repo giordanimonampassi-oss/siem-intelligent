@@ -43,6 +43,11 @@ def _calculer_severite(parsed: LogParse) -> str:
     if parsed.log_type == "web":
         return _severite_web(parsed.raw_message)
 
+    if parsed.log_type == "system":
+        # Activite systeme routiniere (ex: cron) : pas une alerte de
+        # securite en soi, mais on la garde pour la tracabilite.
+        return "info"
+
     # Type de log sans regle specifique encore definie (ex: "network"
     # pour le simulateur Cisco) : on reste prudent par defaut.
     return "warning"

@@ -34,6 +34,8 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
   - `sender.py` — construit le JSON, POST vers l'API, file d'attente locale si échec réseau
   - `agent.py` — point d'entrée, boucle principale
 - [x] Écrire le parser `auth.log` (priorité — scénario SC-01 brute force SSH) — testé en local sur 4 cas réels (Invalid user, Failed password root/non-root, Accepted password), severity correcte dans tous les cas
+- [x] Extraction de `source_ip` pour les lignes PAM (`rhost=`) et `Connection reset by ...` qui n'étaient pas couvertes initialement
+- [x] Distinction des lignes `cron` (activité système routinière) du reste de `auth.log` : classées en `log_type: "system"`, `severity: "info"`, pour éviter les fausses alertes
 - [ ] Écrire le parser Apache (`access.log` / `error.log`)
 - [ ] Écrire le parser Cisco simulé (format IOS via Syslog)
 

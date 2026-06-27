@@ -38,3 +38,6 @@ frontend/build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# --- AGENTS DE COLLECTE (DONNÉES DE TEST LOCALES) ---
+*.jsonl
