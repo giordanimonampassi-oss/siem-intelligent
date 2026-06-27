@@ -48,5 +48,5 @@ Les logs reçus s'affichent dans la console et sont sauvegardés dans `mock_rece
 
 ## Limitations connues
 
-- Le timestamp de `auth.log` ne contient pas l'année (format syslog classique) : l'agent suppose l'année courante. Hypothèse acceptable pour ce projet académique tant que l'horloge de la VM est correcte.
 - `watchdog==4.0.1` n'est pas compatible avec Python 3.13 (bug interne lié à `threading`) : le projet utilise `watchdog==6.0.0`.
+- Le parser `auth.log` gère deux formats de timestamp : l'ISO 8601 complet (défaut Ubuntu 22.04+, avec année et fuseau horaire) et l'ancien format syslog classique sans année (où l'année courante est supposée, et l'horloge de la VM supposée en UTC).
