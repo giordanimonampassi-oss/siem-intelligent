@@ -17,6 +17,7 @@ Ce dossier contient l'agent de collecte de logs (WBS 1.1.2) et l'infrastructure 
 | `config_loader.py` | Charge et valide `config.yaml`. |
 | `parsers/base.py` | Interface commune à tous les parsers (`LogParse`). |
 | `parsers/auth_parser.py` | Parse `/var/log/auth.log` (SSH : `Failed password`, `Invalid user`, `Accepted password`...). |
+| `parsers/apache_parser.py` | Parse `/var/log/apache2/access.log` (format `combined`). |
 | `normalizer.py` | Calcule la `severity` et construit le JSON final conforme au contrat. |
 | `sender.py` | Envoie le JSON par `POST`. En cas d'échec, écrit dans `queue_file` et réessaie automatiquement. |
 | `watcher.py` | Surveille les fichiers en continu (équivalent `tail -f`, basé sur `watchdog`). |
@@ -50,3 +51,5 @@ Les logs reçus s'affichent dans la console et sont sauvegardés dans `mock_rece
 
 - `watchdog==4.0.1` n'est pas compatible avec Python 3.13 (bug interne lié à `threading`) : le projet utilise `watchdog==6.0.0`.
 - Le parser `auth.log` gère deux formats de timestamp : l'ISO 8601 complet (défaut Ubuntu 22.04+, avec année et fuseau horaire) et l'ancien format syslog classique sans année (où l'année courante est supposée, et l'horloge de la VM supposée en UTC).
+- Sur Ubuntu 24.04, `pip install` refuse d'installer dans l'environnement système (PEP 668). Solution utilisée : `pip install --user --break-system-packages -r requirements.txt`, qui installe dans `~/.local` sans toucher aux paquets système.
+- Une VM clonée garde le compte Linux de la VM d'origine : sur `CTU-WEB` (clonée depuis `CTU-AUTH`), le compte de connexion reste `ctu-auth` même si la VM et son hostname s'appellent `ctu-web`.

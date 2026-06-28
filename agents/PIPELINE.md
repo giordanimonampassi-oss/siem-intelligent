@@ -51,8 +51,9 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 
 - [x] Copier l'agent sur `CTU-AUTH` (scp), adapter la config (`server_url` vers l'hôte, `queue_file` en répertoire utilisateur)
 - [x] Validation réelle bout-en-bout sur `CTU-AUTH` : tentative SSH échouée → ligne `auth.log` réelle → agent → mock server sur l'hôte, JSON conforme au contrat reçu dans `mock_received_logs.jsonl`
-- [ ] Copier l'agent sur `CTU-WEB`, adapter la config
-- [ ] Créer un service `systemd` pour démarrage automatique
+- [x] Copier l'agent sur `CTU-WEB` (scp), adapter la config (`host`, `dest_ip`, parser `apache`)
+- [x] Validation réelle bout-en-bout sur `CTU-WEB` : requêtes HTTP (200, 404 x2) → agent → mock server, JSON conforme au contrat
+- [ ] Créer un service `systemd` pour démarrage automatique (sur les deux VM)
 
 ## Phase 6 — Intégration équipe (différée, pas bloquante)
 
