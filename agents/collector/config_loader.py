@@ -32,6 +32,9 @@ class Config:
     watched_files: list[FichierSurveille]
     queue_file: str
     retry_interval: int
+    # Chemin vers le certificat du serveur si celui-ci est auto-signe
+    # (cas du mock server en TLS). None = verification standard (CA reconnue).
+    ca_cert: str | None
 
 
 def charger_config(chemin_fichier: str = "config.yaml") -> Config:
@@ -59,4 +62,5 @@ def charger_config(chemin_fichier: str = "config.yaml") -> Config:
         # Valeurs par defaut si absentes du YAML, pour rester tolerant.
         queue_file=donnees.get("queue_file", "/var/log/siem-agent/queue.jsonl"),
         retry_interval=donnees.get("retry_interval", 10),
+        ca_cert=donnees.get("ca_cert"),
     )

@@ -16,10 +16,14 @@ import requests
 class Sender:
     """Gere l'envoi HTTP des logs et la file d'attente locale."""
 
-    def __init__(self, server_url: str, queue_file: str, timeout: int = 5):
+    def __init__(self, server_url: str, queue_file: str, timeout: int = 5, ca_cert: str | bool = True):
         self.server_url = server_url
         self.queue_file = queue_file
         self.timeout = timeout
+        # True : verification standard (cas normal, certificat signe par une CA reconnue).
+        # Chemin vers un .crt : verification contre ce certificat precis (cas du
+        # certificat auto-signe du mock server, qui n'est dans aucune CA connue).
+        self.ca_cert = ca_cert
 
         # On s'assure que le dossier de la file d'attente existe avant
         # d'essayer d'y ecrire quoi que ce soit.
@@ -61,7 +65,9 @@ class Sender:
     def _poster(self, log: dict) -> bool:
         """Envoie un seul log par HTTP POST. Renvoie True si accepte (2xx)."""
         try:
-            reponse = requests.post(self.server_url, json=log, timeout=self.timeout)
+            reponse = requests.post(
+                self.server_url, json=log, timeout=self.timeout, verify=self.ca_cert
+            )
             return reponse.status_code in (200, 201)
         except requests.exceptions.RequestException:
             # Pas de connexion, timeout, DNS injoignable, etc.

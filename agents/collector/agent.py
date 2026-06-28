@@ -33,7 +33,11 @@ def main():
     # defaut (utile pour les tests locaux sans toucher au config.yaml de prod).
     chemin_config = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
     config = charger_config(chemin_config)
-    sender = Sender(server_url=config.server_url, queue_file=config.queue_file)
+    sender = Sender(
+        server_url=config.server_url,
+        queue_file=config.queue_file,
+        ca_cert=config.ca_cert if config.ca_cert else True,
+    )
 
     fichiers_et_callbacks = []
     for fichier_surveille in config.watched_files:

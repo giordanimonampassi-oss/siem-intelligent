@@ -41,3 +41,8 @@ Thumbs.db
 
 # --- AGENTS DE COLLECTE (DONNÉES DE TEST LOCALES) ---
 *.jsonl
+
+# Certificats TLS auto-signés générés localement (spécifiques à chaque IP
+# de réseau Host-Only) : on commite le script, pas le résultat.
+agents/collector/certs/*.crt
+agents/collector/certs/*.key

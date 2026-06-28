@@ -6,9 +6,15 @@ envoie bien des logs au bon format, conforme au contrat JSON.
 Pour basculer sur la vraie API plus tard : il suffit de changer
 "server_url" dans config.yaml. Aucun code de l'agent n'a besoin de changer.
 
-Lancement :
+Lancement (HTTP, pour debug rapide sans TLS) :
     pip install fastapi uvicorn
     uvicorn mock_server:app --host 0.0.0.0 --port 8000
+
+Lancement en TLS (mode normal, cf. exigence "chiffrement en transit" du
+cahier des charges) -- necessite d'avoir genere un certificat au prealable
+avec certs/generate_cert.sh :
+    uvicorn mock_server:app --host 0.0.0.0 --port 8000 \
+        --ssl-keyfile certs/mock_server.key --ssl-certfile certs/mock_server.crt
 """
 
 import json

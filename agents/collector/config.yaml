@@ -3,7 +3,13 @@
 # autre machine (CTU-AUTH, CTU-WEB, ...). Le code Python reste identique.
 
 # URL de l'API qui recoit les logs (le mock local en attendant la vraie API FastAPI).
-server_url: "http://192.168.6.1:8000/api/v1/logs"
+# En HTTPS : le mock server tourne avec un certificat auto-signe (voir certs/README.md).
+server_url: "https://192.168.6.1:8000/api/v1/logs"
+
+# Chemin vers le certificat du serveur, necessaire car il est auto-signe
+# (pas emis par une CA reconnue). A retirer/laisser vide quand on basculera
+# sur la vraie API avec un certificat valide (Let's Encrypt ou CA interne).
+ca_cert: "certs/mock_server.crt"
 
 # Identite de la machine sur laquelle tourne l'agent.
 # Ces valeurs sont mises dans chaque log envoye (champs "host" et "dest_ip").

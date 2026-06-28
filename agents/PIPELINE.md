@@ -46,6 +46,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Pointer l'agent (config externalisée via `config.yaml`, surchargeable en argument CLI) vers ce mock en local
 - [x] Test de bout en bout : `Invalid user`, `Failed password` (root/non-root), `Accepted password` → JSON reçu conforme au contrat, severity correcte
 - [x] Test de résilience réseau : serveur coupé → log mis en file d'attente locale, sans perte ; serveur relancé → log rejoué automatiquement au prochain cycle (`retry_interval`)
+- [x] Chiffrement en transit (TLS) — exigence section 4.2 du cahier des charges : `server_url` en `https://`, certificat auto-signé pour le mock server (`certs/generate_cert.sh`), vérifié côté agent via `ca_cert` dans `config.yaml` (`requests.post(..., verify=ca_cert)`). Testé bout-en-bout : log envoyé et reçu correctement, et confirmé qu'une requête sans le certificat est bien rejetée (`SSLError`)
 
 ## Phase 5 — Déploiement agent sur les VM
 
@@ -59,6 +60,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 
 - [ ] Mettre en place le point de convergence (tunnel ngrok/Tailscale ou serveur partagé) quand Backend + BDD seront prêts à recevoir du trafic externe
 - [ ] Reconfigurer l'agent pour pointer vers l'IP réelle (un seul paramètre à changer)
+- [ ] Adapter `ca_cert` au certificat réel de l'API FastAPI (CA reconnue type Let's Encrypt → `ca_cert: null`/absent ; certificat auto-signé interne → chemin vers ce certificat, même principe que pour le mock server)
 - [ ] Test d'intégration bout-en-bout (VM → agent → vraie API FastAPI → vraie BDD)
 
 ## Phase 7 — Documentation
