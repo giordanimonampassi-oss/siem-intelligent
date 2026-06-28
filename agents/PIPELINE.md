@@ -54,13 +54,15 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Validation réelle bout-en-bout sur `CTU-AUTH` : tentative SSH échouée → ligne `auth.log` réelle → agent → mock server sur l'hôte, JSON conforme au contrat reçu dans `mock_received_logs.jsonl`
 - [x] Copier l'agent sur `CTU-WEB` (scp), adapter la config (`host`, `dest_ip`, parser `apache`)
 - [x] Validation réelle bout-en-bout sur `CTU-WEB` : requêtes HTTP (200, 404 x2) → agent → mock server, JSON conforme au contrat
+- [x] Chiffrement TLS déployé et validé bout-en-bout sur les **deux VM** : `server_url` en `https://`, certificat auto-signé du mock copié sur chaque VM (`certs/mock_server.crt`) et vérifié via `ca_cert` — log réel envoyé et reçu en HTTPS sur `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log)
 - [ ] Créer un service `systemd` pour démarrage automatique (sur les deux VM)
 
 ## Phase 6 — Intégration équipe (différée, pas bloquante)
 
-- [ ] Mettre en place le point de convergence (tunnel ngrok/Tailscale ou serveur partagé) quand Backend + BDD seront prêts à recevoir du trafic externe
-- [ ] Reconfigurer l'agent pour pointer vers l'IP réelle (un seul paramètre à changer)
-- [ ] Adapter `ca_cert` au certificat réel de l'API FastAPI (CA reconnue type Let's Encrypt → `ca_cert: null`/absent ; certificat auto-signé interne → chemin vers ce certificat, même principe que pour le mock server)
+- [ ] Mettre en place le point de convergence — approche retenue : **VPS sur Tailscale**, API exposée en HTTPS via `tailscale serve` (certificat Let's Encrypt réel, accessible uniquement depuis le tailnet ; uvicorn bind sur `127.0.0.1`)
+- [ ] Reconfigurer l'agent : `server_url` vers le VPS **et ajout de l'authentification** — la vraie API exige un token JWT (`POST /api/v1/auth/login` → `Authorization: Bearer`, expiration 30 min à renouveler sur 401), là où le mock n'en demandait aucun → logique de login à ajouter dans `sender.py` (identifiants dans un fichier secrets gitignoré, pas dans `config.yaml`)
+- [ ] Créer côté Backend un **compte de service** dédié pour les agents (rôle minimal, **MFA désactivé** — une machine ne peut pas saisir de TOTP)
+- [ ] Adapter `ca_cert` : avec `tailscale serve` le certificat est émis par une CA reconnue (Let's Encrypt) → `ca_cert` absent, vérification standard
 - [ ] Test d'intégration bout-en-bout (VM → agent → vraie API FastAPI → vraie BDD)
 
 ## Phase 7 — Documentation
