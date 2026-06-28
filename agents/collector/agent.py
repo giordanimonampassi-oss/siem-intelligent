@@ -13,16 +13,18 @@ import time
 
 from config_loader import charger_config
 from normalizer import normaliser
+from parsers.apache_parser import ApacheParser
 from parsers.auth_parser import AuthParser
 from sender import Sender
 from watcher import surveiller_fichiers
 
 
 # Association entre le nom de parser indique dans config.yaml et la classe
-# Python correspondante. Pour ajouter une nouvelle source (Apache, Cisco...),
+# Python correspondante. Pour ajouter une nouvelle source (Cisco...),
 # il suffit d'ajouter une ligne ici.
 PARSEURS_DISPONIBLES = {
     "auth": AuthParser,
+    "apache": ApacheParser,
 }
 
 

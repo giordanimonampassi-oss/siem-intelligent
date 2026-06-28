@@ -36,7 +36,8 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Écrire le parser `auth.log` (priorité — scénario SC-01 brute force SSH) — testé en local sur 4 cas réels (Invalid user, Failed password root/non-root, Accepted password), severity correcte dans tous les cas
 - [x] Extraction de `source_ip` pour les lignes PAM (`rhost=`) et `Connection reset by ...` qui n'étaient pas couvertes initialement
 - [x] Distinction des lignes `cron` (activité système routinière) du reste de `auth.log` : classées en `log_type: "system"`, `severity: "info"`, pour éviter les fausses alertes
-- [ ] Écrire le parser Apache (`access.log` / `error.log`)
+- [x] Écrire le parser Apache (`access.log`, format `combined`) — testé sur 3 lignes réelles de `CTU-WEB` (200, 404 x2), severity correcte
+- [ ] Écrire le parser Apache `error.log`
 - [ ] Écrire le parser Cisco simulé (format IOS via Syslog)
 
 ## Phase 4 — Test local sans dépendre du backend réel
