@@ -5,8 +5,8 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 ## Phase 0 — Cadrage
 
 - [x] Confirmer le contrat JSON avec le Dev Backend (FastAPI) :
-  - `log_type` : `auth`, `web`, `network`, `system`
-  - `severity` : `info`, `warning`, `high`, `critical`
+  - `log_type` : `auth`, `network`, `system`, `application`, `cloud` (les logs web Apache → `application`)
+  - `severity` (logs) : `info`, `warning`, `critical` — `high` est un niveau d'**alerte** (`AlertSeverity`), pas de log
   - `timestamp` : ISO 8601 UTC (`Z`)
   - champs manquants : `null` explicite (jamais de champ omis)
 
@@ -57,13 +57,14 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Chiffrement TLS déployé et validé bout-en-bout sur les **deux VM** : `server_url` en `https://`, certificat auto-signé du mock copié sur chaque VM (`certs/mock_server.crt`) et vérifié via `ca_cert` — log réel envoyé et reçu en HTTPS sur `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log)
 - [ ] Créer un service `systemd` pour démarrage automatique (sur les deux VM)
 
-## Phase 6 — Intégration équipe (différée, pas bloquante)
+## Phase 6 — Intégration équipe (réalisée)
 
-- [ ] Mettre en place le point de convergence — approche retenue : **VPS sur Tailscale**, API exposée en HTTPS via `tailscale serve` (certificat Let's Encrypt réel, accessible uniquement depuis le tailnet ; uvicorn bind sur `127.0.0.1`)
-- [ ] Reconfigurer l'agent : `server_url` vers le VPS **et ajout de l'authentification** — la vraie API exige un token JWT (`POST /api/v1/auth/login` → `Authorization: Bearer`, expiration 30 min à renouveler sur 401), là où le mock n'en demandait aucun → logique de login à ajouter dans `sender.py` (identifiants dans un fichier secrets gitignoré, pas dans `config.yaml`)
-- [ ] Créer côté Backend un **compte de service** dédié pour les agents (rôle minimal, **MFA désactivé** — une machine ne peut pas saisir de TOTP)
-- [ ] Adapter `ca_cert` : avec `tailscale serve` le certificat est émis par une CA reconnue (Let's Encrypt) → `ca_cert` absent, vérification standard
-- [ ] Test d'intégration bout-en-bout (VM → agent → vraie API FastAPI → vraie BDD)
+- [x] Point de convergence : **Tailscale**. L'API (PC du dev backend, nœud `gaps`) est exposée en HTTPS via `tailscale serve` → `https://gaps.taildaa032.ts.net` (certificat Let's Encrypt réel, accessible uniquement depuis le tailnet ; uvicorn bind sur `127.0.0.1`). Les deux VM ont rejoint le tailnet.
+- [x] Agent reconfiguré : `server_url`/`auth_url` vers la vraie API **avec authentification JWT** (`POST /api/v1/auth/login` → `Authorization: Bearer`, renouvellement automatique sur 401). Identifiants dans un `.env` gitignoré (`SIEM_AGENT_PASSWORD`), pas dans `config.yaml`.
+- [x] Compte de service dédié créé côté Backend (`agent@ctu.gov`, rôle `reader`, **MFA désactivé** — une machine ne peut pas saisir de TOTP)
+- [x] `ca_cert` retiré : certificat Let's Encrypt reconnu → vérification standard
+- [x] Alignement du contrat : `severity` ramenée à 3 niveaux (`high` → `warning`, car `high` est un niveau d'alerte), `log_type` web → `application`, pour coller aux enums du Backend
+- [x] Test d'intégration bout-en-bout validé : `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log) → agent → vraie API FastAPI → PostgreSQL + Elasticsearch (`201`, `es_indexed: true`)
 
 ## Phase 7 — Documentation
 
@@ -94,15 +95,14 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 | `Invalid user` | warning |
 | `Accepted password` / `Accepted key` | info |
 | `POSSIBLE BREAK-IN ATTEMPT` | critical |
-| `sudo: authentication failure` | high |
-| `session opened for user root` | high |
+| `authentication failure` | warning |
+| `session opened for user root` | warning |
 
-### Règles de mapping `severity` — Apache access.log
+### Règles de mapping `severity` — Apache access.log (`log_type: application`)
 
 | Code HTTP | Severity |
 | --- | --- |
 | 2xx | info |
 | 3xx | info |
-| 4xx | warning |
-| 403 | high |
-| 5xx | high |
+| 4xx (dont 403) | warning |
+| 5xx | warning |
