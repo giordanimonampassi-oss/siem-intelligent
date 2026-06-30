@@ -55,7 +55,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Copier l'agent sur `CTU-WEB` (scp), adapter la config (`host`, `dest_ip`, parser `apache`)
 - [x] Validation réelle bout-en-bout sur `CTU-WEB` : requêtes HTTP (200, 404 x2) → agent → mock server, JSON conforme au contrat
 - [x] Chiffrement TLS déployé et validé bout-en-bout sur les **deux VM** : `server_url` en `https://`, certificat auto-signé du mock copié sur chaque VM (`certs/mock_server.crt`) et vérifié via `ca_cert` — log réel envoyé et reçu en HTTPS sur `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log)
-- [ ] Créer un service `systemd` pour démarrage automatique (sur les deux VM)
+- [x] Service `systemd` (`siem-agent.service`) — démarrage automatique au boot + redémarrage sur crash (`Restart=always`), `PYTHONUNBUFFERED=1` pour les logs dans `journalctl` ; installé et validé sur les deux VM
 
 ## Phase 6 — Intégration équipe (réalisée)
 

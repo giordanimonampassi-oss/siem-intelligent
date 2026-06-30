@@ -1,0 +1,35 @@
+# Service systemd pour l'agent de collecte SIEM.
+# Identique sur les deux VM (meme compte ctu-auth, meme chemin /home/ctu-auth/collector).
+#
+# Installation (sur chaque VM) :
+#   sudo cp ~/collector/siem-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now siem-agent
+# Suivre les logs en direct : journalctl -u siem-agent -f
+
+[Unit]
+Description=Agent de collecte de logs SIEM (collector)
+# Demarre apres le reseau et Tailscale (si present). La file d'attente locale
+# couvre de toute facon les cas ou l'API n'est pas encore joignable au boot.
+After=network-online.target tailscaled.service
+Wants=network-online.target
+# Evite une boucle de redemarrage serree en cas d'erreur de config persistante.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ctu-auth
+WorkingDirectory=/home/ctu-auth/collector
+# Sans ca, Python bufferise stdout quand la sortie n'est pas un terminal
+# (cas systemd) : les print() de l'agent n'apparaitraient pas dans journalctl.
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/ctu-auth/collector/agent.py
+Restart=always
+RestartSec=5
+# L'agent gere SIGINT proprement (arret de l'observer) : on demande donc a
+# systemd d'utiliser SIGINT plutot que SIGTERM lors d'un "systemctl stop".
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
