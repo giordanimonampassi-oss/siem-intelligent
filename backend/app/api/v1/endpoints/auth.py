@@ -159,8 +159,11 @@ async def list_users(
     limit: int = 100,
 ):
     """Liste tous les utilisateurs — admin uniquement."""
-    result = await db.execute(select(CTSUser).offset(skip).limit(limit))
-    return [UserResponse.model_validate(u) for u in result.scalars().all()]
+    try :
+        result = await db.execute(select(CTSUser).offset(skip).limit(limit))
+        return [UserResponse.model_validate(u) for u in result.scalars().all()]
+    finally:
+            await db.close()
 
 
 @router.get("/users/{user_id}", response_model=UserResponse,
