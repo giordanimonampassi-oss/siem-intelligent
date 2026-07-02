@@ -29,21 +29,15 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Étape 1 : email + mot de passe.
-    Si MFA activé → retourne mfa_required=true, le client appelle /mfa/verify ensuite.
-    """
     user = await auth_service.authenticate(payload.email, payload.password, db)
     if not user:
-        await auth_service.log_audit("login_failed", db,
-                                     target=payload.email,
-                                     ip=request.client.host if request.client else None,
-                                     result="failed")
-        await db.commit()
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Email ou mot de passe incorrect")
+        # ... audit failed
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
 
-    mfa_required = user.mfa_enabled
+    # Exemption MFA pour les admins
+    is_admin = user.role == UserRole.ADMIN
+    mfa_required = user.mfa_enabled and not is_admin
+
     token = auth_service.build_token(user, mfa_verified=not mfa_required)
 
     if not mfa_required:
@@ -188,14 +182,19 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     current_user: CTSUser = Depends(get_current_user),
 ):
-    """Modifie le rôle, le périmètre ou le statut d'un utilisateur."""
+    """Modifie le rôle, l'email ou d'autres infos d'un utilisateur."""
     user = await auth_service.update_user(user_id, payload, db)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    await db.commit()
+    await db.refresh(user)          # ← Très important !
+
     await auth_service.log_audit("user_updated", db, user_id=current_user.id,
                                  target=str(user_id),
                                  ip=request.client.host if request.client else None)
-    await db.commit()
+
+    print(f"[UPDATE USER] User {user_id} mis à jour -> role={payload.role}, email={getattr(payload, 'email', None)}")
     return UserResponse.model_validate(user)
 
 

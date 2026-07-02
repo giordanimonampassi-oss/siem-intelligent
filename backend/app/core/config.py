@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     log_retention_days: int = 30
 
     # Notifications
+     # Pour Gmail : activer "Mots de passe d'application" dans le compte Google
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
@@ -49,12 +50,42 @@ class Settings(BaseSettings):
     smtp_from: str = "siem-alerts@ucac-icam.cm"
     webhook_url: str = ""
 
+    # Destinataires des alertes (comma-separated)
+    alert_recipients: str = ""       # ex: admin@ctu.gov,rssi@ctu.gov
+
+     # ── Webhook Slack/Teams ───────────────────────────────────────────────────
+    # Slack  : https://api.slack.com/messaging/webhooks
+    # Teams  : https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors
+    webhook_url:  str = ""           # URL du webhook entrant
+ 
+    # ── SMS (optionnel — Twilio) ──────────────────────────────────────────────
+    twilio_account_sid: str = ""
+    twilio_auth_token:  str = ""
+    twilio_from_number: str = ""
+    twilio_to_number:   str = ""     # Numero astreinte (+237XXXXXXXXX)
+
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
 
     @property
     def cors_origins(self) -> List[str]:
         return [o.strip() for o in self.allowed_origins.split(",")]
+
+    @property
+    def alert_recipients_list(self) -> List[str]:
+        return [r.strip() for r in self.alert_recipients.split(",") if r.strip()]
+ 
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_user and self.smtp_password)
+ 
+    @property
+    def webhook_configured(self) -> bool:
+        return bool(self.webhook_url)
+ 
+    @property
+    def sms_configured(self) -> bool:
+        return bool(self.twilio_account_sid and self.twilio_auth_token and self.twilio_to_number)
 
 
 settings = Settings()

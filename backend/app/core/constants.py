@@ -64,12 +64,16 @@ class IncidentStatus(str, Enum):
     IN_PROGRESS  = "IN_PROGRESS"
     RESOLVED     = "RESOLVED"
 
+# Nom de l'index Elasticsearch
+ES_INDEX_LOGS = "logs"
+ES_INDEX_ALERTS = "alerts"
 
 # Seuil UEBA pour rehaussement d'alerte
+UEBA_RISK_THRESHOLD = 50
 UEBA_RISK_THRESHOLD_CORREL = 50
 
 # Taille de batch pour l'ingestion en masse
+DEDUP_WINDOW_SEC  = 300
 LOG_BATCH_SIZE = 500
+ALERT_RETENTION_DAYS = 90
 
-# Nom de l'index Elasticsearch
-ES_INDEX_LOGS = "logs"
