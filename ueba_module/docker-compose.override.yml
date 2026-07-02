@@ -1,0 +1,63 @@
+# docker-compose.override.yml
+#
+# Ajoute le simulateur et l'API de scoring au stack Docker existant.
+# Lance avec : docker compose -f docker-compose.yml -f docker-compose.override.yml up
+#
+# Le simulateur tourne SUR L'HÔTE (python simulateur_logs.py) ou dans ce container.
+# L'API de scoring est exposée sur :8000 pour que la pipeline ES puisse l'appeler.
+
+version: "3.9"
+
+services:
+
+  # ── API de scoring UEBA ───────────────────────────────────────────────────
+  ueba-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.ueba
+    container_name: ueba-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      ES_HOST: "https://elasticsearch:9200"
+      ES_USER: elastic
+      ES_PASSWORD: "${ES_PASSWORD:-changeme}"
+      ES_VERIFY_CERTS: "false"
+      ES_INDEX: siem-logs
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: "${PG_DB:-smart_siem}"
+      PG_USER: "${PG_USER:-postgres}"
+      PG_PASSWORD: "${PG_PASSWORD:-changeme}"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./saved_models:/app/saved_models:ro
+      - ./logs:/app/logs
+    networks:
+      - siem-network
+    depends_on:
+      - elasticsearch
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000
+
+  # ── Simulateur (mode batch au démarrage, puis s'arrête) ──────────────────
+  ueba-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.ueba
+    container_name: ueba-simulator
+    restart: "no"
+    environment:
+      BACKEND_URL: "http://backend:8080"
+      LOG_RATE: "2"
+      ANOMALY_RATE: "0.2"
+      LOG_TYPES: "application,system,auth,network"
+    networks:
+      - siem-network
+    depends_on:
+      - ueba-api
+    command: python simulateur_logs.py --mode batch --n 100
+
+networks:
+  siem-network:
+    external: true   # réseau créé par le docker-compose.yml principal
