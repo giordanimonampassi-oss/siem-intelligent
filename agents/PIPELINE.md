@@ -37,6 +37,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Extraction de `source_ip` pour les lignes PAM (`rhost=`) et `Connection reset by ...` qui n'étaient pas couvertes initialement
 - [x] Distinction des lignes `cron` (activité système routinière) du reste de `auth.log` : classées en `log_type: "system"`, `severity: "info"`, pour éviter les fausses alertes
 - [x] Écrire le parser Apache (`access.log`, format `combined`) — testé sur 3 lignes réelles de `CTU-WEB` (200, 404 x2), severity correcte
+- [x] Collecteur **Windows** (Journal d'événements, canal `Security` via `Get-WinEvent`) — EventIDs `4625`/`4624`/`4776`/`4672`/`1102`, point d'entrée `agent_windows.py`. **3ᵉ source réelle**, testé sur `darkfnmj26` (event `4625` capturé). Couvre des scénarios MITRE jusque-là simulés : **T1110** (brute force), **T1550** (pass-the-hash NTLM, scénario S6), **T1070** (effacement du journal d'audit)
 - [ ] Écrire le parser Apache `error.log`
 - [ ] Écrire le parser Cisco simulé (format IOS via Syslog)
 

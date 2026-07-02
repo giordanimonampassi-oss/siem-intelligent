@@ -37,6 +37,11 @@ def normaliser(parsed: LogParse, host: str, dest_ip: str) -> dict:
 def _calculer_severite(parsed: LogParse) -> str:
     """Choisit le niveau de severite selon le type et le contenu du log."""
 
+    # Certains parsers (ex: Windows) fixent eux-memes la severity selon un
+    # code d'evenement : on la respecte telle quelle.
+    if parsed.severity:
+        return parsed.severity
+
     if parsed.log_type == "auth":
         return _severite_auth(parsed)
 

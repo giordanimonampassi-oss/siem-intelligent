@@ -1,0 +1,27 @@
+# Configuration de l'agent de collecte Windows (Journal d'evenements).
+# A adapter sur la machine Windows ou tourne l'agent. Le mot de passe du
+# compte agent est lu dans SIEM_AGENT_PASSWORD (fichier .env), pas ici.
+
+# API reelle exposee en HTTPS via tailscale serve (certificat reconnu -> pas de ca_cert).
+server_url: "https://gaps.taildaa032.ts.net/api/v1/logs"
+auth_url:   "https://gaps.taildaa032.ts.net/api/v1/auth/login"
+api_user:   "agent@ctu.gov"
+
+# Identite de la machine (mis dans chaque log : "host" et "dest_ip").
+# dest_ip = la machine qui recoit les connexions (ce PC). Adapter a ton IP.
+host: "darkfnmj26"
+dest_ip: "100.92.112.1"
+
+# Canaux du Journal a surveiller et EventIDs a extraire.
+# Security exige un lancement en administrateur.
+#   4625 echec logon (T1110) | 4624 logon reussi | 4776 NTLM (T1550)
+#   4672 privileges admin    | 1102 journal efface (T1070)
+watched_events:
+  - channel: "Security"
+    event_ids: [4625, 4624, 4776, 4672, 1102]
+
+# Delai (secondes) entre deux sondages du Journal.
+poll_interval: 10
+
+# File d'attente locale (resilience reseau). Le dossier est cree au besoin.
+queue_file: "C:/ProgramData/siem-agent/queue.jsonl"
