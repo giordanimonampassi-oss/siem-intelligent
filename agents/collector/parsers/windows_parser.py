@@ -44,6 +44,15 @@ LOGTYPE_PAR_EVENT = {
 # Valeurs d'Ip "locales" a considerer comme "pas d'IP source distante".
 IP_LOCALES = {"-", "", "::1", "127.0.0.1"}
 
+# Comptes systeme/service : leurs logons (4624 type 5) et privileges (4672)
+# se declenchent en continu en arriere-plan -> bruit de fond a ne pas remonter.
+COMPTES_SERVICE = {"SYSTEM", "LOCAL SERVICE", "NETWORK SERVICE", "ANONYMOUS LOGON"}
+
+# LogonTypes interessants pour un 4624 (logon reussi) : 3 = reseau (mouvement
+# lateral), 10 = RemoteInteractive/RDP. Les autres (4 batch, 5 service, 7 unlock,
+# 11 cached...) sont routiniers et bruyants.
+LOGON_TYPES_UTILES = {"3", "10"}
+
 
 class WindowsEventParser(Parser):
     """Extrait les informations utiles d'un evenement Windows Security."""
@@ -55,6 +64,9 @@ class WindowsEventParser(Parser):
 
         data = event.get("EventData") or {}
 
+        if self._est_bruit(event_id, data):
+            return None  # Activite systeme routiniere : on ne remonte pas.
+
         return LogParse(
             timestamp=self._parse_timestamp(event.get("TimeCreated")),
             source_ip=self._extraire_ip(data),
@@ -63,6 +75,25 @@ class WindowsEventParser(Parser):
             log_type=LOGTYPE_PAR_EVENT[event_id],
             severity=SEVERITE_PAR_EVENT[event_id],
         )
+
+    @staticmethod
+    def _est_bruit(event_id: int, data: dict) -> bool:
+        """Filtre le bruit de fond Windows (logons/privileges des comptes service).
+
+        Ne s'applique qu'aux evenements bruyants (4624, 4672). Les echecs (4625),
+        NTLM (4776) et effacement du journal (1102) remontent toujours.
+        """
+        if event_id not in (4624, 4672):
+            return False
+
+        user = (data.get("TargetUserName") or data.get("SubjectUserName") or "")
+        if user.endswith("$") or user.upper() in COMPTES_SERVICE:
+            return True
+
+        if event_id == 4624 and data.get("LogonType") not in LOGON_TYPES_UTILES:
+            return True
+
+        return False
 
     @staticmethod
     def _parse_timestamp(valeur: str | None) -> datetime:
