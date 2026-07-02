@@ -7,7 +7,18 @@ manipuler (Config) plutot qu'un simple dictionnaire.
 """
 
 from dataclasses import dataclass
+import os
+
 import yaml
+
+# Charge un eventuel fichier .env (gitignore) du dossier courant, pour y lire
+# le mot de passe du compte agent (SIEM_AGENT_PASSWORD). python-dotenv est
+# optionnel : si absent, on se rabat sur les variables d'environnement reelles.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 # Champs qui doivent obligatoirement exister dans config.yaml.
@@ -35,6 +46,11 @@ class Config:
     # Chemin vers le certificat du serveur si celui-ci est auto-signe
     # (cas du mock server en TLS). None = verification standard (CA reconnue).
     ca_cert: str | None
+    # Authentification a la vraie API. None sur les deux si on cible un mock
+    # sans auth. Le mot de passe vient de l'environnement, jamais du YAML.
+    auth_url: str | None
+    api_user: str | None
+    api_password: str | None
 
 
 def charger_config(chemin_fichier: str = "config.yaml") -> Config:
@@ -54,6 +70,18 @@ def charger_config(chemin_fichier: str = "config.yaml") -> Config:
         for entry in donnees["watched_files"]
     ]
 
+    auth_url = donnees.get("auth_url")
+    api_password = os.environ.get("SIEM_AGENT_PASSWORD")
+
+    # Si on cible la vraie API (auth_url defini), le mot de passe est
+    # obligatoire : on arrete tout de suite avec un message clair.
+    if auth_url and not api_password:
+        raise ValueError(
+            "auth_url est defini mais la variable d'environnement "
+            "SIEM_AGENT_PASSWORD est absente (mot de passe du compte agent). "
+            "Cree un fichier .env avec SIEM_AGENT_PASSWORD=... (voir .env.example)."
+        )
+
     return Config(
         server_url=donnees["server_url"],
         host=donnees["host"],
@@ -63,4 +91,7 @@ def charger_config(chemin_fichier: str = "config.yaml") -> Config:
         queue_file=donnees.get("queue_file", "/var/log/siem-agent/queue.jsonl"),
         retry_interval=donnees.get("retry_interval", 10),
         ca_cert=donnees.get("ca_cert"),
+        auth_url=auth_url,
+        api_user=donnees.get("api_user"),
+        api_password=api_password,
     )

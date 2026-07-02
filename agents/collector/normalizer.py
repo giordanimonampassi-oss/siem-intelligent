@@ -37,10 +37,15 @@ def normaliser(parsed: LogParse, host: str, dest_ip: str) -> dict:
 def _calculer_severite(parsed: LogParse) -> str:
     """Choisit le niveau de severite selon le type et le contenu du log."""
 
+    # Certains parsers (ex: Windows) fixent eux-memes la severity selon un
+    # code d'evenement : on la respecte telle quelle.
+    if parsed.severity:
+        return parsed.severity
+
     if parsed.log_type == "auth":
         return _severite_auth(parsed)
 
-    if parsed.log_type == "web":
+    if parsed.log_type == "application":
         return _severite_web(parsed.raw_message)
 
     if parsed.log_type == "system":
@@ -65,11 +70,13 @@ def _severite_auth(parsed: LogParse) -> str:
     if "Invalid user" in message:
         return "warning"
 
+    # "high" n'existe pas dans LogSeverity (3 niveaux : info/warning/critical) ;
+    # c'est un niveau reserve aux alertes (AlertSeverity). On reste en warning.
     if "authentication failure" in message:
-        return "high"
+        return "warning"
 
     if "session opened for user root" in message:
-        return "high"
+        return "warning"
 
     if "Accepted password" in message or "Accepted publickey" in message:
         return "info"
@@ -85,10 +92,9 @@ def _severite_web(message: str) -> str:
 
     code = int(correspondance.group("code"))
 
-    if code == 403:
-        return "high"
-    if code >= 500:
-        return "high"
+    # LogSeverity n'a que 3 niveaux (info/warning/critical) : "high" est reserve
+    # aux alertes. Les erreurs HTTP (4xx dont 403, 5xx) restent donc en warning,
+    # le 2xx/3xx en info.
     if code >= 400:
         return "warning"
     return "info"

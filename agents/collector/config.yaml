@@ -1,15 +1,22 @@
 # Configuration de l'agent de collecte.
 # Ce fichier est le SEUL endroit a modifier pour deployer l'agent sur une
 # autre machine (CTU-AUTH, CTU-WEB, ...). Le code Python reste identique.
+#
+# NB : ce fichier est specifique a chaque machine et n'est PAS synchronise
+# automatiquement (exclu du tar de deploiement). On l'edite sur chaque VM.
 
-# URL de l'API qui recoit les logs (le mock local en attendant la vraie API FastAPI).
-# En HTTPS : le mock server tourne avec un certificat auto-signe (voir certs/README.md).
-server_url: "https://192.168.6.1:8000/api/v1/logs"
+# URL de l'API qui recoit les logs (vraie API FastAPI exposee en HTTPS via
+# tailscale serve -- certificat Let's Encrypt reconnu, donc pas de ca_cert).
+server_url: "https://gaps.taildaa032.ts.net/api/v1/logs"
 
-# Chemin vers le certificat du serveur, necessaire car il est auto-signe
-# (pas emis par une CA reconnue). A retirer/laisser vide quand on basculera
-# sur la vraie API avec un certificat valide (Let's Encrypt ou CA interne).
-ca_cert: "certs/mock_server.crt"
+# Authentification : l'API reelle exige un token JWT. L'agent se connecte
+# ici pour l'obtenir et le renouvelle automatiquement a l'expiration (30 min).
+# (Pour tester sur le mock server local sans auth, retirer auth_url + api_user.)
+auth_url: "https://gaps.taildaa032.ts.net/api/v1/auth/login"
+api_user: "agent@ctu.gov"
+# Le mot de passe N'EST PAS ici (fichier suivi par git). Il est lu dans la
+# variable d'environnement SIEM_AGENT_PASSWORD, fournie via un fichier .env
+# gitignore (voir .env.example).
 
 # Identite de la machine sur laquelle tourne l'agent.
 # Ces valeurs sont mises dans chaque log envoye (champs "host" et "dest_ip").

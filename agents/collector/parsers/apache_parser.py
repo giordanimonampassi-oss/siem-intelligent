@@ -47,7 +47,9 @@ class ApacheParser(Parser):
             source_ip=correspondance.group("ip"),
             username=utilisateur,
             raw_message=ligne.strip(),
-            log_type="web",
+            # Le backend classe les logs web dans la categorie "application"
+            # (LogType n'a pas de valeur "web").
+            log_type="application",
         )
 
     @staticmethod

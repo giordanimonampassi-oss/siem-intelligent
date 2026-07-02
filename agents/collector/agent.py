@@ -37,6 +37,9 @@ def main():
         server_url=config.server_url,
         queue_file=config.queue_file,
         ca_cert=config.ca_cert if config.ca_cert else True,
+        auth_url=config.auth_url,
+        api_user=config.api_user,
+        api_password=config.api_password,
     )
 
     fichiers_et_callbacks = []

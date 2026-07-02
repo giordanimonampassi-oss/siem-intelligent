@@ -5,7 +5,8 @@ Ce dossier contient l'agent de collecte de logs (WBS 1.1.2) et l'infrastructure 
 ## Ce qui est fait
 
 - Deux VM Ubuntu 24.04 (`CTU-AUTH` avec OpenSSH, `CTU-WEB` avec Apache2) générant de vrais logs sur un réseau Host-Only VirtualBox.
-- Un agent Python custom (`collector/`) qui surveille des fichiers de logs en continu, parse les lignes, les normalise selon le contrat JSON convenu avec le Backend, et les envoie par HTTP.
+- Un agent Python custom (`collector/`) qui surveille des fichiers de logs en continu, parse les lignes, les normalise selon le contrat JSON convenu avec le Backend, et les envoie par HTTPS (TLS).
+- Chiffrement TLS déployé et validé bout-en-bout sur les **deux VM** : `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log) envoient en `https://`, certificat vérifié côté agent.
 - Une file d'attente locale automatique si l'envoi échoue (coupure réseau) — testée et validée : aucun log n'est perdu, tout est rejoué dès que la connexion revient.
 - Un serveur mock (`collector/mock_server.py`) qui remplace temporairement la vraie API FastAPI du Backend, pour pouvoir valider l'agent sans dépendre de son avancement.
 
@@ -26,7 +27,7 @@ Ce dossier contient l'agent de collecte de logs (WBS 1.1.2) et l'infrastructure 
 
 ## Brancher la vraie API quand elle sera prête
 
-Aucune modification de code n'est nécessaire. Il suffit de changer `server_url` dans `config.yaml` pour qu'il pointe vers l'API FastAPI réelle du Backend (directement, ou via un tunnel ngrok/Tailscale en attendant un serveur partagé — voir Phase 6 de `PIPELINE.md`).
+Changer `server_url` dans `config.yaml` suffit pour **cibler** l'API FastAPI réelle (via un VPS sur Tailscale exposé en HTTPS — voir Phase 6 de `PIPELINE.md`). En revanche, contrairement au mock, la vraie API **exige une authentification** : l'endpoint `POST /api/v1/logs` requiert un token JWT (`Authorization: Bearer`), obtenu via `POST /api/v1/auth/login` et à renouveler à l'expiration (30 min). `sender.py` devra donc gérer ce login et l'ajout du token — détail dans la Phase 6 de `PIPELINE.md`.
 
 ## Lancer l'agent
 

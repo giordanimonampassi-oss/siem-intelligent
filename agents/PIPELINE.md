@@ -5,8 +5,8 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 ## Phase 0 — Cadrage
 
 - [x] Confirmer le contrat JSON avec le Dev Backend (FastAPI) :
-  - `log_type` : `auth`, `web`, `network`, `system`
-  - `severity` : `info`, `warning`, `high`, `critical`
+  - `log_type` : `auth`, `network`, `system`, `application`, `cloud` (les logs web Apache → `application`)
+  - `severity` (logs) : `info`, `warning`, `critical` — `high` est un niveau d'**alerte** (`AlertSeverity`), pas de log
   - `timestamp` : ISO 8601 UTC (`Z`)
   - champs manquants : `null` explicite (jamais de champ omis)
 
@@ -37,6 +37,7 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Extraction de `source_ip` pour les lignes PAM (`rhost=`) et `Connection reset by ...` qui n'étaient pas couvertes initialement
 - [x] Distinction des lignes `cron` (activité système routinière) du reste de `auth.log` : classées en `log_type: "system"`, `severity: "info"`, pour éviter les fausses alertes
 - [x] Écrire le parser Apache (`access.log`, format `combined`) — testé sur 3 lignes réelles de `CTU-WEB` (200, 404 x2), severity correcte
+- [x] Collecteur **Windows** (Journal d'événements, canal `Security` via `Get-WinEvent`) — EventIDs `4625`/`4624`/`4776`/`4672`/`1102`, point d'entrée `agent_windows.py`. **3ᵉ source réelle**, testé sur `darkfnmj26` (event `4625` capturé). Couvre des scénarios MITRE jusque-là simulés : **T1110** (brute force), **T1550** (pass-the-hash NTLM, scénario S6), **T1070** (effacement du journal d'audit)
 - [ ] Écrire le parser Apache `error.log`
 - [ ] Écrire le parser Cisco simulé (format IOS via Syslog)
 
@@ -54,14 +55,17 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 - [x] Validation réelle bout-en-bout sur `CTU-AUTH` : tentative SSH échouée → ligne `auth.log` réelle → agent → mock server sur l'hôte, JSON conforme au contrat reçu dans `mock_received_logs.jsonl`
 - [x] Copier l'agent sur `CTU-WEB` (scp), adapter la config (`host`, `dest_ip`, parser `apache`)
 - [x] Validation réelle bout-en-bout sur `CTU-WEB` : requêtes HTTP (200, 404 x2) → agent → mock server, JSON conforme au contrat
-- [ ] Créer un service `systemd` pour démarrage automatique (sur les deux VM)
+- [x] Chiffrement TLS déployé et validé bout-en-bout sur les **deux VM** : `server_url` en `https://`, certificat auto-signé du mock copié sur chaque VM (`certs/mock_server.crt`) et vérifié via `ca_cert` — log réel envoyé et reçu en HTTPS sur `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log)
+- [x] Service `systemd` (`siem-agent.service`) — démarrage automatique au boot + redémarrage sur crash (`Restart=always`), `PYTHONUNBUFFERED=1` pour les logs dans `journalctl` ; installé et validé sur les deux VM
 
-## Phase 6 — Intégration équipe (différée, pas bloquante)
+## Phase 6 — Intégration équipe (réalisée)
 
-- [ ] Mettre en place le point de convergence (tunnel ngrok/Tailscale ou serveur partagé) quand Backend + BDD seront prêts à recevoir du trafic externe
-- [ ] Reconfigurer l'agent pour pointer vers l'IP réelle (un seul paramètre à changer)
-- [ ] Adapter `ca_cert` au certificat réel de l'API FastAPI (CA reconnue type Let's Encrypt → `ca_cert: null`/absent ; certificat auto-signé interne → chemin vers ce certificat, même principe que pour le mock server)
-- [ ] Test d'intégration bout-en-bout (VM → agent → vraie API FastAPI → vraie BDD)
+- [x] Point de convergence : **Tailscale**. L'API (PC du dev backend, nœud `gaps`) est exposée en HTTPS via `tailscale serve` → `https://gaps.taildaa032.ts.net` (certificat Let's Encrypt réel, accessible uniquement depuis le tailnet ; uvicorn bind sur `127.0.0.1`). Les deux VM ont rejoint le tailnet.
+- [x] Agent reconfiguré : `server_url`/`auth_url` vers la vraie API **avec authentification JWT** (`POST /api/v1/auth/login` → `Authorization: Bearer`, renouvellement automatique sur 401). Identifiants dans un `.env` gitignoré (`SIEM_AGENT_PASSWORD`), pas dans `config.yaml`.
+- [x] Compte de service dédié créé côté Backend (`agent@ctu.gov`, rôle `reader`, **MFA désactivé** — une machine ne peut pas saisir de TOTP)
+- [x] `ca_cert` retiré : certificat Let's Encrypt reconnu → vérification standard
+- [x] Alignement du contrat : `severity` ramenée à 3 niveaux (`high` → `warning`, car `high` est un niveau d'alerte), `log_type` web → `application`, pour coller aux enums du Backend
+- [x] Test d'intégration bout-en-bout validé : `CTU-AUTH` (auth.log) et `CTU-WEB` (access.log) → agent → vraie API FastAPI → PostgreSQL + Elasticsearch (`201`, `es_indexed: true`)
 
 ## Phase 7 — Documentation
 
@@ -92,15 +96,14 @@ Ce document décrit le pipeline complet de mise en place des agents de collecte,
 | `Invalid user` | warning |
 | `Accepted password` / `Accepted key` | info |
 | `POSSIBLE BREAK-IN ATTEMPT` | critical |
-| `sudo: authentication failure` | high |
-| `session opened for user root` | high |
+| `authentication failure` | warning |
+| `session opened for user root` | warning |
 
-### Règles de mapping `severity` — Apache access.log
+### Règles de mapping `severity` — Apache access.log (`log_type: application`)
 
 | Code HTTP | Severity |
 | --- | --- |
 | 2xx | info |
 | 3xx | info |
-| 4xx | warning |
-| 403 | high |
-| 5xx | high |
+| 4xx (dont 403) | warning |
+| 5xx | warning |
