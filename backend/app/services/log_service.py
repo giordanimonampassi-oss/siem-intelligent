@@ -106,6 +106,7 @@ async def ingest_batch(
         "critical":    sum(1 for e in entries if e.severity == "CRITICAL"),
         "warning":     sum(1 for e in entries if e.severity == "WARNING"),
         "sha256":      sha256,
+        "entries":    entries,
     }
 
 
@@ -125,7 +126,9 @@ async def search_logs_pg(
     if params.severity:   filters.append(LogEntry.severity == params.severity.value)
     if params.from_dt:    filters.append(LogEntry.timestamp >= params.from_dt)
     if params.to_dt:      filters.append(LogEntry.timestamp <= params.to_dt)
-    if params.keyword:    filters.append(LogEntry.raw_message.ilike(f"%{params.keyword}%"))
+    # if params.keyword:    filters.append(LogEntry.raw_message.ilike(f"%{params.keyword}%"))
+    if params.keyword and params.keyword.strip(): keyword = f"%{params.keyword.strip()}%"
+    filters.append(LogEntry.raw_message.ilike(keyword))
 
     base_q = select(LogEntry)
     if filters:
@@ -147,30 +150,48 @@ async def search_logs_pg(
     )
 
 
-async def search_logs_es(
-    params: LogSearchParams,
-    es: AsyncElasticsearch,
-) -> LogSearchResult:
-    """Recherche full-text Elasticsearch (keyword, multi-champ)."""
-    must, filters = [], []
+async def search_logs_es(params: LogSearchParams, es: AsyncElasticsearch) -> LogSearchResult:
+    """
+    Recherche Elasticsearch.
+    - Les champs texte (raw_message, host, username) → multi_match
+    - Les champs IP (source_ip, dest_ip) → term exact (le type 'ip' ES n'accepte pas multi_match)
+    - keyword → cherche dans raw_message + host + username SEULEMENT (pas dans les champs ip)
+    """
+    must:    list = []
+    filters: list = []
 
+    # ── Full-text sur les champs texte uniquement ─────────────────────────────
     if params.keyword:
-        must.append({"multi_match": {
-            "query":  params.keyword,
-            "fields": ["raw_message", "host", "username", "source_ip"],
-        }})
-    if params.source_ip: filters.append({"term": {"source_ip": params.source_ip}})
-    if params.dest_ip:   filters.append({"term": {"dest_ip":   params.dest_ip}})
-    if params.host:      filters.append({"term": {"host":      params.host}})
-    if params.username:  filters.append({"term": {"username":  params.username}})
-    if params.log_type:  filters.append({"term": {"log_type":  params.log_type.value}})
-    if params.severity:  filters.append({"term": {"severity":  params.severity.value}})
+        must.append({
+            "multi_match": {
+                "query":  params.keyword,
+                "fields": ["raw_message", "host", "username"],
+                "type":   "best_fields",
+                "fuzziness": "AUTO",
+            }
+        })
+
+    # ── Filtres exacts ────────────────────────────────────────────────────────
+    # IPs : term exact (champ type "ip" dans ES)
+    if params.source_ip:
+        filters.append({"term": {"source_ip": params.source_ip}})
+    if params.dest_ip:
+        filters.append({"term": {"dest_ip": params.dest_ip}})
+
+    # Autres champs keyword
+    if params.host:     filters.append({"term": {"host":     params.host}})
+    if params.username: filters.append({"term": {"username": params.username}})
+    if params.log_type: filters.append({"term": {"log_type": params.log_type.value}})
+    if params.severity: filters.append({"term": {"severity": params.severity.value}})
+
+    # Plage de dates
     if params.from_dt or params.to_dt:
         rng: Dict[str, Any] = {}
         if params.from_dt: rng["gte"] = params.from_dt.isoformat()
         if params.to_dt:   rng["lte"] = params.to_dt.isoformat()
         filters.append({"range": {"timestamp": rng}})
 
+    # ── Construction de la query ──────────────────────────────────────────────
     if must or filters:
         query: Dict[str, Any] = {"bool": {}}
         if must:    query["bool"]["must"]   = must
@@ -179,13 +200,19 @@ async def search_logs_es(
         query = {"match_all": {}}
 
     offset = (params.page - 1) * params.size
-    resp = await es.search(
-        index=settings.elasticsearch_index_logs,
-        query=query,
-        from_=offset,
-        size=params.size,
-        sort=[{"timestamp": {"order": "desc"}}],
-    )
+
+    try:
+        resp = await es.search(
+            index=settings.elasticsearch_index_logs,
+            query=query,
+            from_=offset,
+            size=params.size,
+            sort=[{"timestamp": {"order": "desc"}}],
+        )
+    except Exception as exc:
+        # Si ES echoue (index absent, mapping incompatible...), fallback PG
+        print(f"[ES] Search error, pas de fallback: {exc}")
+        raise
 
     hits  = resp["hits"]["hits"]
     total = resp["hits"]["total"]["value"]
@@ -193,23 +220,26 @@ async def search_logs_es(
     results = []
     for hit in hits:
         src = hit["_source"]
-        # Convertir les types ES → LogDetail
-        results.append(LogDetail(
-            id=src.get("id", hit["_id"]),
-            timestamp=src.get("timestamp"),
-            source_ip=src.get("source_ip"),
-            dest_ip=src.get("dest_ip"),
-            host=src.get("host"),
-            username=src.get("username"),
-            log_type=src.get("log_type", "SYSTEM"),
-            severity=src.get("severity", "INFO"),
-            raw_message=src.get("raw_message", ""),
-            is_suspicious=src.get("is_suspicious", False),
-            note=src.get("note"),
-            batch_id=src.get("batch_id"),
-            es_indexed=True,
-            created_at=src.get("created_at", src.get("timestamp")),
-        ))
+        try:
+            results.append(LogDetail(
+                id=src.get("id", hit["_id"]),
+                timestamp=src.get("timestamp"),
+                source_ip=src.get("source_ip"),
+                dest_ip=src.get("dest_ip"),
+                host=src.get("host"),
+                username=src.get("username"),
+                log_type=src.get("log_type", "system"),
+                severity=src.get("severity", "info"),
+                raw_message=src.get("raw_message", ""),
+                is_suspicious=src.get("is_suspicious", False),
+                note=src.get("note"),
+                batch_id=src.get("batch_id"),
+                es_indexed=True,
+                created_at=src.get("created_at") or src.get("timestamp"),
+            ))
+        except Exception:
+            # Ignorer les documents malformes
+            continue
 
     return LogSearchResult(total=total, page=params.page, size=params.size, results=results)
 

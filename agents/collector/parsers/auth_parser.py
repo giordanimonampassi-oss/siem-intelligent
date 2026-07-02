@@ -49,6 +49,20 @@ REGEX_ACCEPTED = re.compile(
     r"Accepted (password|publickey) for (?P<user>\S+) from (?P<ip>\S+) port"
 )
 
+# Coupure de connexion en cours d'authentification : pas de "from", l'IP
+# est placee juste apres le nom d'utilisateur.
+REGEX_CONNECTION_RESET = re.compile(
+    r"Connection reset by (invalid user|authenticating user) (?P<user>\S+) (?P<ip>\S+) port"
+)
+
+# Echec PAM (ex: pam_unix(sshd:auth): authentication failure ... rhost=X) :
+# l'IP est dans le champ "rhost=", pas apres un "from".
+REGEX_PAM_RHOST = re.compile(r"rhost=(?P<ip>\S+)")
+
+# Process responsable d'une ligne purement liee a cron (pas une tentative
+# d'authentification distante) : on la classe a part, en log_type "system".
+PROCESSUS_CRON = "cron"
+
 
 class AuthParser(Parser):
     """Extrait les evenements d'authentification depuis auth.log."""
@@ -65,9 +79,22 @@ class AuthParser(Parser):
             timestamp = self._construire_timestamp_classique(correspondance.group("date"))
 
         message = correspondance.group("message")
+        process = correspondance.group("process")
+
+        # Les taches cron (executees periodiquement par root) ne sont pas
+        # des tentatives d'authentification distante : on les classe a
+        # part pour ne pas declencher de fausses alertes "auth" severes.
+        if process.lower() == PROCESSUS_CRON:
+            return LogParse(
+                timestamp=timestamp,
+                source_ip=None,
+                username=None,
+                raw_message=message,
+                log_type="system",
+            )
 
         # On essaie chaque type d'evenement connu, dans l'ordre.
-        for regex in (REGEX_FAILED_PASSWORD, REGEX_INVALID_USER, REGEX_ACCEPTED):
+        for regex in (REGEX_FAILED_PASSWORD, REGEX_INVALID_USER, REGEX_ACCEPTED, REGEX_CONNECTION_RESET):
             trouve = regex.search(message)
             if trouve:
                 return LogParse(
@@ -77,6 +104,18 @@ class AuthParser(Parser):
                     raw_message=message,
                     log_type="auth",
                 )
+
+        # Echec PAM generique (ex: "authentication failure ... rhost=X") :
+        # l'IP est recuperable, mais pas toujours le nom d'utilisateur.
+        trouve = REGEX_PAM_RHOST.search(message)
+        if trouve:
+            return LogParse(
+                timestamp=timestamp,
+                source_ip=trouve.group("ip"),
+                username=None,
+                raw_message=message,
+                log_type="auth",
+            )
 
         # La ligne est un vrai log auth.log mais ne correspond a aucun motif
         # connu (ex: demarrage du service). On la transmet quand meme avec

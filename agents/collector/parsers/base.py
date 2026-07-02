@@ -19,7 +19,11 @@ class LogParse:
     source_ip: str | None
     username: str | None
     raw_message: str
-    log_type: str  # "auth", "web", "network", "system"
+    log_type: str  # "auth", "application", "network", "system"
+    # Severity fixee directement par le parser quand elle depend d'un code
+    # (ex: EventID Windows) plutot que du texte. Si None, le normalizer la
+    # deduit du log_type + raw_message (cas des parsers Linux).
+    severity: str | None = None
 
 
 class Parser:

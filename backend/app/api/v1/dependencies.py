@@ -15,15 +15,26 @@ from models.user import CTSUser
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
+# async def get_db() -> AsyncGenerator[AsyncSession, None]:
+#     async with AsyncSessionLocal() as session:
+#         try:
+#             yield session
+#             await session.commit()
+#         except Exception:
+#             await session.rollback()
+#             raise
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            # Supprimez le session.commit() automatique d'ici.
+            # Vos routes d'écriture (POST/PUT/DELETE) s'occuperont de faire leur propre commit.
         except Exception:
             await session.rollback()
             raise
-
+        # En sortant du bloc 'async with', SQLAlchemy appelle automatiquement session.close()
+        # ce qui restitue IMMÉDIATEMENT la connexion au QueuePool.
 
 async def get_es() -> AsyncElasticsearch:
     return es_client

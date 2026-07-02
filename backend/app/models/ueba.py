@@ -1,4 +1,4 @@
-"""Modèle UEBA — profil comportemental utilisateur."""
+"""Modele UEBA — UserBehaviorProfile."""
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -15,15 +15,22 @@ class UserBehaviorProfile(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("cts_users.id"), nullable=False, unique=True
     )
-    metric:                Mapped[Optional[str]]   = mapped_column(String(100), nullable=True)
-    mean:                  Mapped[float]           = mapped_column(Float, default=0.0)
-    std_dev:               Mapped[float]           = mapped_column(Float, default=0.0)
-    ntrps:                 Mapped[int]             = mapped_column(Integer, default=0)
-    last_updated:          Mapped[datetime]        = mapped_column(
+    metric:   Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    mean:     Mapped[float]         = mapped_column(Float, default=0.0)
+    std_dev:  Mapped[float]         = mapped_column(Float, default=0.0)
+    ntrps:    Mapped[int]           = mapped_column(Integer, default=0)
+
+    # Baseline comportementale (Module 4)
+    avg_login_hour:        Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    avg_daily_volume_mb:   Mapped[Optional[float]]  = mapped_column(Float, nullable=True)
+    avg_session_duration_h:Mapped[Optional[float]]  = mapped_column(Float, nullable=True)
+    usual_hosts:           Mapped[Optional[str]]    = mapped_column(String(1024), nullable=True)
+
+    last_updated: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     compute_anomaly_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    is_anomaly_value:      Mapped[bool]            = mapped_column(Boolean, default=False)
+    is_anomaly_value:      Mapped[bool]             = mapped_column(Boolean, default=False)
 
     user = relationship("CTSUser", back_populates="behavior_profiles")
 

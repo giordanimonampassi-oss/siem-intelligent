@@ -13,16 +13,18 @@ import time
 
 from config_loader import charger_config
 from normalizer import normaliser
+from parsers.apache_parser import ApacheParser
 from parsers.auth_parser import AuthParser
 from sender import Sender
 from watcher import surveiller_fichiers
 
 
 # Association entre le nom de parser indique dans config.yaml et la classe
-# Python correspondante. Pour ajouter une nouvelle source (Apache, Cisco...),
+# Python correspondante. Pour ajouter une nouvelle source (Cisco...),
 # il suffit d'ajouter une ligne ici.
 PARSEURS_DISPONIBLES = {
     "auth": AuthParser,
+    "apache": ApacheParser,
 }
 
 
@@ -31,7 +33,14 @@ def main():
     # defaut (utile pour les tests locaux sans toucher au config.yaml de prod).
     chemin_config = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
     config = charger_config(chemin_config)
-    sender = Sender(server_url=config.server_url, queue_file=config.queue_file)
+    sender = Sender(
+        server_url=config.server_url,
+        queue_file=config.queue_file,
+        ca_cert=config.ca_cert if config.ca_cert else True,
+        auth_url=config.auth_url,
+        api_user=config.api_user,
+        api_password=config.api_password,
+    )
 
     fichiers_et_callbacks = []
     for fichier_surveille in config.watched_files:
