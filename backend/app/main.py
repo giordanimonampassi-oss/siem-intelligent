@@ -6,6 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
 
 from core.config import settings
 from api.v1.router import api_router
@@ -100,6 +103,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+FRONTEND_ORIGIN = "http://localhost:5173"
+ 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Affiche la vraie trace dans le terminal uvicorn (essentiel pour debug)
+    traceback.print_exc()
+ 
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erreur interne du serveur",
+            "error": str(exc),
+            "type": type(exc).__name__,
+        },
+        headers={
+            "Access-Control-Allow-Origin": FRONTEND_ORIGIN,
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 app.include_router(api_router)

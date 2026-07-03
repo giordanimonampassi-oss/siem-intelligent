@@ -3,7 +3,7 @@ import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, case
 from elasticsearch import AsyncElasticsearch
 
 from api.v1.dependencies import get_db, get_es, get_current_user, require_analyst, require_auditor
@@ -13,11 +13,13 @@ from schemas.log_schemas import (
     LogIngest, LogBatchIngest, LogResponse, LogDetail,
     LogSearchParams, LogSearchResult, LogMarkSuspicious, BatchIntegrityResponse,
 )
+from models.incident import Incident
 from services import log_service
 from services.auth_service import log_audit
 from services.correlator import process_log_for_alerts
 from services.soar import trigger_auto_playbooks
 from core.constants import LogSeverity, LogType
+from sqlalchemy import or_
 
 router = APIRouter(prefix="/logs", tags=["Logs — Modules 1, 2, 3"])
 
@@ -120,6 +122,105 @@ async def logs_health(db: AsyncSession = Depends(get_db), es: AsyncElasticsearch
         pass
     return {"postgresql": "ok" if pg_ok else "error", "elasticsearch": "ok" if es_ok else "error",
             "status": "healthy" if (pg_ok and es_ok) else "degraded"}
+
+
+@router.get("/stats", response_model=dict)
+async def get_logs_stats(
+    db: AsyncSession = Depends(get_db),
+    es: AsyncElasticsearch = Depends(get_es),
+    current_user = Depends(get_current_user),
+    hours: int = Query(24, ge=1, le=168, description="Période en heures (1 à 7 jours)"),
+):
+    """Statistiques pour le dashboard."""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, desc, select
+
+    start_time = datetime.utcnow() - timedelta(hours=hours)
+
+    total_logs = await db.execute(
+        select(func.count(LogEntry.id)).where(LogEntry.created_at >= start_time)
+    )
+    logs_last_hour = await db.execute(
+        select(func.count(LogEntry.id)).where(
+            LogEntry.created_at >= datetime.utcnow() - timedelta(hours=1)
+        )
+    )
+
+    severity_stats = await db.execute(
+        select(
+            LogEntry.severity,
+            func.count(LogEntry.id).label("count")
+        )
+        .where(LogEntry.created_at >= start_time)
+        .group_by(LogEntry.severity)
+    )
+    by_severity = {str(row.severity): row.count for row in severity_stats}
+
+    type_stats = await db.execute(
+        select( 
+            LogEntry.log_type,
+            func.count(LogEntry.id).label("count")
+        )
+        .where(LogEntry.created_at >= start_time)
+        .group_by(LogEntry.log_type)
+    )
+    by_type = {str(row.log_type): row.count for row in type_stats}
+
+    top_ips = await db.execute(
+        select(
+            LogEntry.source_ip,
+            func.count(LogEntry.id).label("count")
+        )
+        .where(LogEntry.created_at >= start_time)
+        .where(LogEntry.source_ip.isnot(None))
+        .where(LogEntry.source_ip != '')
+        .group_by(LogEntry.source_ip)
+        .order_by(desc("count"))
+        .limit(10)
+    )
+    top_source_ips = [
+        {"ip": row.source_ip, "count": int(row.count)} 
+        for row in top_ips if row.source_ip
+    ]
+
+    # ── Volume horaire pour le graphique ─────────────────────────────
+    hourly_stats = await db.execute(
+        select(
+            func.date_trunc('hour', LogEntry.created_at).label("hour"),
+            func.count(LogEntry.id).label("total"),
+            func.count(case((LogEntry.severity == 'critical', 1), else_=None)).label("critical")
+        )
+        .where(LogEntry.created_at >= start_time)
+        .group_by("hour")
+        .order_by("hour")
+    )
+
+    hourly_volume = [
+        {
+            "hour": row.hour.strftime("%Hh"),
+            "total": row.total,
+            "critical": row.critical or 0
+        }
+        for row in hourly_stats
+    ]
+    open_incidents_count = (await db.execute(
+    select(func.count(Incident.id)).where(
+        or_(Incident.status == "OPEN", Incident.status == "IN_PROGRESS")
+    )
+)).scalar_one()
+
+    return {
+        "total_logs": total_logs.scalar() or 0,
+        "logs_last_hour": logs_last_hour.scalar() or 0,
+        "by_severity": by_severity,
+        "by_type": by_type,
+        "top_source_ips": top_source_ips,
+        "hourly_volume": hourly_volume,          # ← Ajout important
+        "open_incidents": open_incidents_count,
+        "period_hours": hours,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 
 
 @router.get("/{log_id}", response_model=LogDetail)

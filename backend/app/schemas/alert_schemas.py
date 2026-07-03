@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
-from core.constants import LogSeverity, AlertStatus, RuleType, PlaybookMode
+from core.constants import LogSeverity, AlertStatus, RuleType, PlaybookMode, AlertSeverity
 
 
 # ─── Alertes ─────────────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ class RuleCreate(BaseModel):
     time_window_sec:   Optional[int]  = Field(None, ge=5, le=86400)
     cooldown_minutes:  Optional[int]  = Field(None, ge=0)
     pattern_sequence:  Optional[str]  = None
-    alert_level:       LogSeverity    = LogSeverity.WARNING
+    alert_level:       AlertSeverity    = AlertSeverity.WARNING
     confidence_score:  float          = Field(0.8, ge=0.0, le=1.0)
     is_active:         bool           = True
 
@@ -74,7 +74,7 @@ class RuleUpdate(BaseModel):
     threshold:        Optional[int]       = None
     time_window_sec:  Optional[int]       = None
     target_keyword:   Optional[str]       = None
-    alert_level:      Optional[LogSeverity] = None
+    alert_level:      Optional[AlertSeverity] = None
     confidence_score: Optional[float]     = None
     is_active:        Optional[bool]      = None
 

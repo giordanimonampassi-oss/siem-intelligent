@@ -12,8 +12,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from sqlalchemy import String
 from db.database import Base
-from core.constants import AlertStatus, LogSeverity, RuleType
+from core.constants import AlertStatus, AlertSeverity, RuleType
 
 
 class CorrelationRule(Base):
@@ -43,10 +44,12 @@ class CorrelationRule(Base):
     cooldown_minutes:  Mapped[Optional[int]] = mapped_column(Integer,     nullable=True)
     pattern_sequence:  Mapped[Optional[str]] = mapped_column(Text,        nullable=True)   # JSON pour regles pattern
 
-    # Alerte produite
+    # Alerte produite — AlertSeverity (INFO/WARNING/HIGH/CRITICAL), PAS LogSeverity.
+    # Colonne texte simple (pas d'ENUM Postgres strict) : la validation des
+    # valeurs se fait côté Pydantic (alert_schemas.py), ce qui évite les
+    # migrations ALTER TYPE à chaque évolution des valeurs possibles.
     alert_level:       Mapped[str]            = mapped_column(
-        SAEnum(LogSeverity, values_callable=lambda x: [e.value for e in x]),
-        nullable=False, default=LogSeverity.WARNING.value,
+        String(20), nullable=False, default=AlertSeverity.WARNING.value,
     )
     confidence_score:  Mapped[float]           = mapped_column(Float, default=0.8)
 
@@ -85,9 +88,10 @@ class Alert(Base):
     )
 
     # Classification
+    # severity : AlertSeverity (INFO/WARNING/HIGH/CRITICAL), PAS LogSeverity —
+    # colonne texte simple, même raisonnement que CorrelationRule.alert_level.
     severity:       Mapped[str] = mapped_column(
-        SAEnum(LogSeverity, values_callable=lambda x: [e.value for e in x]),
-        nullable=False, default=LogSeverity.WARNING.value,
+        String(20), nullable=False, default=AlertSeverity.WARNING.value,
     )
     status:         Mapped[str] = mapped_column(
         SAEnum(AlertStatus, values_callable=lambda x: [e.value for e in x]),

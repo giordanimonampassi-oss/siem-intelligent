@@ -6,7 +6,7 @@ from sqlalchemy import Boolean, DateTime, Integer, String, Text, JSON, ForeignKe
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db.database import Base
-from core.constants import PlaybookMode, LogSeverity
+from core.constants import PlaybookMode, AlertSeverity
 
 
 class Playbook(Base):
@@ -20,9 +20,10 @@ class Playbook(Base):
         default=PlaybookMode.MANUAL.value,
     )
     max_delay_sec:   Mapped[int]            = mapped_column(Integer, default=60)
-    severity_filter: Mapped[Optional[str]]  = mapped_column(
-        SAEnum(LogSeverity, values_callable=lambda x: [e.value for e in x]), nullable=True
-    )
+    # severity_filter : AlertSeverity (INFO/WARNING/HIGH/CRITICAL), PAS LogSeverity —
+    # un playbook filtre des ALERTES, pas des logs bruts. Colonne texte simple,
+    # même raisonnement que Alert.severity / CorrelationRule.alert_level.
+    severity_filter: Mapped[Optional[str]]  = mapped_column(String(20), nullable=True)
     actions:    Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     channels:   Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     is_active:  Mapped[bool]           = mapped_column(Boolean, default=True)

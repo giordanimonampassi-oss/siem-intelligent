@@ -11,7 +11,7 @@ from sqlalchemy import select, func, and_, desc, update
 
 from models.alert import Alert, CorrelationRule
 from models.playbook import PlaybookExecution
-from core.constants import AlertStatus, LogSeverity
+from core.constants import AlertStatus, AlertSeverity
 
 
 # ─── Lecture ─────────────────────────────────────────────────────────────────
@@ -86,33 +86,29 @@ async def resolve_alert(alert: Alert, db: AsyncSession) -> Alert:
 
 # ─── Statistiques dashboard ───────────────────────────────────────────────────
 
-async def get_alert_stats(db: AsyncSession) -> Dict[str, Any]:
-    """KPIs alertes pour le dashboard Module 3."""
-    # Comptage par severite
+async def get_alert_stats(db):
+    from sqlalchemy import select, func, desc
+ 
     sev_counts = {}
-    for sev in LogSeverity:
+    for sev in AlertSeverity:          # ← AlertSeverity, pas LogSeverity
         count = (await db.execute(
             select(func.count(Alert.id)).where(Alert.severity == sev.value)
         )).scalar_one()
         sev_counts[sev.value] = count
-
-    # Comptage par statut
+ 
     stat_counts = {}
     for st in AlertStatus:
         count = (await db.execute(
             select(func.count(Alert.id)).where(Alert.status == st.value)
         )).scalar_one()
         stat_counts[st.value] = count
-
-    # Total
+ 
     total = (await db.execute(select(func.count(Alert.id)))).scalar_one()
-
-    # 5 alertes les plus recentes
+ 
     recent = (await db.execute(
         select(Alert).order_by(desc(Alert.triggered_at)).limit(5)
     )).scalars().all()
-
-    # Top sources IP
+ 
     top_ips_rows = (await db.execute(
         select(Alert.source_ip, func.count(Alert.id).label("count"))
         .where(Alert.source_ip != None)
@@ -121,7 +117,7 @@ async def get_alert_stats(db: AsyncSession) -> Dict[str, Any]:
         .limit(8)
     )).all()
     top_ips = [{"ip": r.source_ip, "count": r.count} for r in top_ips_rows]
-
+ 
     return {
         "total":          total,
         "by_severity":    sev_counts,
@@ -149,7 +145,7 @@ async def cancel_execution(exec_id: uuid.UUID, db: AsyncSession) -> Optional[Pla
     ex = result.scalar_one_or_none()
     if not ex:
         return None
-    ex.status = "cancelled"
+    ex.status = "CANCELLED"
     await db.commit()
     await db.refresh(ex)
     return ex
