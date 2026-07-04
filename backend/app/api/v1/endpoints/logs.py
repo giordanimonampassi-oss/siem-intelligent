@@ -164,7 +164,11 @@ async def get_logs_stats(
         .where(LogEntry.created_at >= start_time)
         .group_by(LogEntry.log_type)
     )
-    by_type = {str(row.log_type): row.count for row in type_stats}
+    # by_type = {str(row.log_type): row.count for row in type_stats}
+    by_type = {
+    (row.log_type.value if hasattr(row.log_type, "value") else row.log_type): row.count
+    for row in type_stats
+    }
 
     top_ips = await db.execute(
         select(

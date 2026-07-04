@@ -109,7 +109,7 @@ async def init_elasticsearch():
 
 
 async def init_db():
-    from models import user, log_entry, alert, playbook, ueba, infrastructure, audit_log
+    from models import user, log_entry, alert, playbook, ueba, infrastructure, audit_log, report
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("[PG] Tables initialisees.")
