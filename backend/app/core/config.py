@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "siem-alerts@ucac-icam.cm"
+    smtp_from: str = ""
     webhook_url: str = ""
 
     # Destinataires des alertes (comma-separated)

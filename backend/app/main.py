@@ -3,6 +3,7 @@ Smart SIEM — Point d'entree FastAPI
 Modules : 1 (Collecte), 2 (Stockage), 3 (Correlation + SOAR + Alertes + Notifications)
 """
 from contextlib import asynccontextmanager
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -14,7 +15,24 @@ from core.config import settings
 from api.v1.router import api_router
 from db.database import init_db, init_elasticsearch, es_client, AsyncSessionLocal
 from services.rule_service import seed_mitre_rules
+from services.ueba_service import snapshot_all_profiles
+from services.soar import sweep_expired_confirmations
+from services.anomaly_detector import run_batch_detection
 
+
+scheduler = AsyncIOScheduler()
+
+async def daily_snapshot_job():
+    async with AsyncSessionLocal() as db:
+        await snapshot_all_profiles(db)
+
+async def confirm_sweep_job():
+    async with AsyncSessionLocal() as db:
+        await sweep_expired_confirmations(db)
+
+async def anomaly_detection_job():
+    async with AsyncSessionLocal() as db:
+        await run_batch_detection(db, lookback_seconds=60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,7 +48,12 @@ async def lifespan(app: FastAPI):
             print("[Module 3] Regles MITRE deja presentes.")
 
     print("Pret — http://localhost:8000/docs")
+    scheduler.add_job(daily_snapshot_job, "cron", hour=0, minute=5)
+    scheduler.add_job(confirm_sweep_job, "interval", seconds=5)
+    scheduler.add_job(anomaly_detection_job, "interval", seconds=30)   # ← nouveau
+    scheduler.start()
     yield
+    scheduler.shutdown()
     await es_client.close()
     print("Arret.")
 

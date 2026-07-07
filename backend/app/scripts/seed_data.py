@@ -1,5 +1,5 @@
 """
-Seed data — 1000 logs simulés CTU.
+Seed data : 1000 logs simulés CTU.
 Usage : python scripts/seed_data.py  (depuis backend/)
 """
 import asyncio, random, sys, os, uuid

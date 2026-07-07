@@ -65,13 +65,31 @@ async def get_score_history(
     )
 
 
+# @router.post("/bootstrap")
+# async def bootstrap(
+#     db: AsyncSession = Depends(get_db),
+#     current_user: CTSUser = Depends(get_current_user),
+# ):
+#     """
+#     Placeholder pour le bootstrapping de la baseline (script Python fourni
+#     dans le cahier des charges, dataset 30 jours). A brancher.
+#     """
+#     return {"message": "Bootstrap non implemente — a brancher sur le dataset simule"}
 @router.post("/bootstrap")
 async def bootstrap(
+    window_days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
     current_user: CTSUser = Depends(get_current_user),
 ):
-    """
-    Placeholder pour le bootstrapping de la baseline (script Python fourni
-    dans le cahier des charges, dataset 30 jours). A brancher.
-    """
-    return {"message": "Bootstrap non implemente — a brancher sur le dataset simule"}
+    result = await ueba_service.bootstrap_baselines(db, window_days)
+    return {"message": "Baseline recalculee", **result}
+
+
+@router.post("/snapshot")
+async def trigger_snapshot(
+    db: AsyncSession = Depends(get_db),
+    current_user: CTSUser = Depends(get_current_user),
+):
+    """Declenchement manuel du snapshot (utile pour tester sans attendre le scheduler)."""
+    count = await ueba_service.snapshot_all_profiles(db)
+    return {"message": f"{count} profils snapshotes"}

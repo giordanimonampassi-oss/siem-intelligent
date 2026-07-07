@@ -64,6 +64,10 @@ class IncidentStatus(str, Enum):
     IN_PROGRESS  = "IN_PROGRESS"
     RESOLVED     = "RESOLVED"
 
+class EntityType(str, Enum):
+    USER    = "user"
+    MACHINE = "machine"
+
 # Nom de l'index Elasticsearch
 ES_INDEX_LOGS = "logs"
 ES_INDEX_ALERTS = "alerts"

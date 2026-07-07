@@ -6,18 +6,24 @@ import asyncio
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from pathlib import Path
 from typing import Optional
 import httpx
 
 from core.config import settings
 from core.constants import LogSeverity
 
+# ── Logo — copie ton fichier ici (backend/app/assets/logo.svg) ──────────────
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.svg"
+LOGO_CID  = "smart_siem_logo"
 
-# ── Niveau -> emoji + couleur HTML ───────────────────────────────────────────
+
+# ── Niveau -> couleur + libelle (badge texte, plus d'image d'icone) ─────────
 SEV_META = {
-    "critical": {"emoji": "🚨", "color": "#F85149", "label": "CRITIQUE"},
-    "warning":  {"emoji": "⚠️",  "color": "#E3A325", "label": "AVERTISSEMENT"},
-    "info":     {"emoji": "ℹ️",  "color": "#58A6FF", "label": "INFO"},
+    "critical": {"color": "#F85149", "label": "CRITIQUE"},
+    "warning":  {"color": "#E3A325", "label": "AVERTISSEMENT"},
+    "info":     {"color": "#58A6FF", "label": "INFO"},
 }
 
 
@@ -25,11 +31,26 @@ def _get_meta(severity: str) -> dict:
     return SEV_META.get(severity.lower(), SEV_META["info"])
 
 
+def _severity_badge(meta: dict) -> str:
+    """Badge colore en texte pur — aucune image, donc jamais casse par un client mail."""
+    return (
+        f'<span style="display:inline-block;padding:4px 10px;border-radius:6px;'
+        f'background:{meta["color"]};color:#0D1117;font-weight:700;'
+        f'font-size:12px;letter-spacing:.5px">{meta["label"]}</span>'
+    )
+
+
 # ── Email Gmail ───────────────────────────────────────────────────────────────
 
-def _build_email_html(alert: dict) -> str:
+def _build_email_html(alert: dict, has_logo: bool) -> str:
     meta  = _get_meta(alert.get("severity", "info"))
     color = meta["color"]
+    badge = _severity_badge(meta)
+    logo_html = (
+        f'<img src="cid:{LOGO_CID}" width="28" height="28" alt="Smart SIEM" '
+        f'style="vertical-align:middle;margin-right:10px;display:inline-block;border-radius:6px" />'
+        if has_logo else ""
+    )
     rows  = [
         ("MITRE ATT&CK",  f"{alert.get('mitre_tactic','N/A')} / {alert.get('mitre_technique','N/A')}"),
         ("Source IP",     alert.get("source_ip") or "—"),
@@ -40,13 +61,17 @@ def _build_email_html(alert: dict) -> str:
         ("ID Alerte",     alert.get("alert_id") or "—"),
         ("Declenche le",  str(alert.get("triggered_at") or "—")),
     ]
+    # IMPORTANT : chaque <td> a desormais une couleur EXPLICITE (label ET valeur).
+    # C'etait l'absence de couleur sur la colonne "valeur" qui la rendait invisible.
     rows_html = "".join(
-        f"<tr><td style='padding:8px 12px;color:#8B949E;font-size:12px;white-space:nowrap'>{k}</td>"
-        f"<td style='padding:8px 12px;font-size:12px;font-family:monospace'>{v}</td></tr>"
+        f"<tr>"
+        f"<td style='padding:8px 12px;color:#8B949E;font-size:12px;white-space:nowrap;vertical-align:top'>{k}</td>"
+        f"<td style='padding:8px 12px;font-size:12px;font-family:monospace;color:#E6EDF3'>{v}</td>"
+        f"</tr>"
         for k, v in rows
     )
     return f"""<!DOCTYPE html>
-<html><body style="margin:0;padding:0;background:#0D1117;font-family:-apple-system,sans-serif">
+<html><body style="margin:0;padding:0;background:#0D1117;font-family:-apple-system,sans-serif;color:#E6EDF3">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding:32px 16px">
       <table width="580" cellpadding="0" cellspacing="0"
@@ -54,13 +79,13 @@ def _build_email_html(alert: dict) -> str:
 
         <!-- Header -->
         <tr><td style="background:{color}18;border-bottom:3px solid {color};padding:20px 28px">
-          <div style="font-size:11px;color:{color};font-weight:700;letter-spacing:.8px;margin-bottom:6px">
+          <div style="font-size:11px;color:{color};font-weight:700;letter-spacing:.8px;margin-bottom:10px">
             SMART SIEM — CTU SECURITY OPERATIONS CENTER
           </div>
           <h1 style="margin:0;font-size:20px;color:#E6EDF3">
-            {meta['emoji']} Alerte {meta['label']}
+            {logo_html}<span style="vertical-align:middle">Alerte</span> {badge}
           </h1>
-          <div style="font-size:15px;color:#E6EDF3;margin-top:6px;font-weight:600">
+          <div style="font-size:15px;color:#E6EDF3;margin-top:10px;font-weight:600">
             {alert.get('title') or 'Incident detecte'}
           </div>
         </td></tr>
@@ -95,22 +120,39 @@ def _build_email_html(alert: dict) -> str:
 
 
 async def send_email_alert(alert: dict) -> dict:
-    """Envoie un email HTML via Gmail SMTP (port 587 + STARTTLS)."""
+    """Envoie un email HTML via Gmail SMTP avec logo SVG inline."""
     if not settings.smtp_configured:
         return {"channel": "email", "result": "skipped", "reason": "smtp_not_configured"}
 
-    recipients = settings.alert_recipients_list
-    if not recipients:
-        recipients = [settings.smtp_user]
+    recipients = settings.alert_recipients_list or [settings.smtp_user]
 
-    meta    = _get_meta(alert.get("severity", "info"))
-    subject = f"[Smart SIEM] {meta['emoji']} Alerte {meta['label']} — {alert.get('title', 'Incident')}"
+    meta = _get_meta(alert.get("severity", "info"))
+    subject = f"[Smart SIEM] [{meta['label']}] {alert.get('title', 'Incident')}"
 
-    msg              = MIMEMultipart("alternative")
-    msg["Subject"]   = subject
-    msg["From"]      = f"Smart SIEM <{settings.smtp_from}>"
-    msg["To"]        = ", ".join(recipients)
-    msg.attach(MIMEText(_build_email_html(alert), "html", "utf-8"))
+    # Logo SVG
+    logo_path = Path(__file__).resolve().parent.parent / "assets" / "logo.svg"
+    has_logo = logo_path.exists()
+
+    # Message principal
+    root = MIMEMultipart("related")
+    root["Subject"] = subject
+    root["From"]    = f"Smart SIEM <{settings.smtp_from}>"
+    root["To"]      = ", ".join(recipients)
+
+    # Corps HTML
+    html = _build_email_html(alert, has_logo)
+    root.attach(MIMEText(html, "html", "utf-8"))
+
+    # Attachement du logo SVG
+    if has_logo:
+        try:
+            with open(logo_path, "rb") as f:
+                img = MIMEImage(f.read(), _subtype="svg+xml")   # Important pour SVG
+            img.add_header("Content-ID", f"<{LOGO_CID}>")
+            img.add_header("Content-Disposition", "inline", filename=logo_path.name)
+            root.attach(img)
+        except Exception as e:
+            print(f"[EMAIL] Erreur logo SVG: {e}")
 
     def _send():
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as srv:
@@ -118,31 +160,25 @@ async def send_email_alert(alert: dict) -> dict:
             srv.starttls()
             srv.ehlo()
             srv.login(settings.smtp_user, settings.smtp_password)
-            srv.sendmail(settings.smtp_from, recipients, msg.as_string())
+            srv.sendmail(settings.smtp_from, recipients, root.as_string())
 
     try:
         await asyncio.to_thread(_send)
         return {
-            "channel":    "email",
-            "result":     "sent",
-            "recipients": recipients,
-        }
-    except smtplib.SMTPAuthenticationError:
-        return {
             "channel": "email",
-            "result":  "error",
-            "detail":  "Authentification Gmail echouee — verifiez smtp_user et smtp_password (mot de passe d'application)",
+            "result": "sent",
+            "recipients": recipients,
+            "logo_included": has_logo,
         }
     except Exception as e:
         return {"channel": "email", "result": "error", "detail": str(e)}
-
 
 # ── Webhook Slack / Teams ─────────────────────────────────────────────────────
 
 def _build_slack_payload(alert: dict) -> dict:
     meta = _get_meta(alert.get("severity", "info"))
     return {
-        "text": f"{meta['emoji']} *Alerte {meta['label']}* — {alert.get('title', 'Incident')}",
+        "text": f"*[{meta['label']}]* — {alert.get('title', 'Incident')}",
         "attachments": [{
             "color":    meta["color"],
             "fields": [
@@ -166,7 +202,7 @@ def _build_teams_payload(alert: dict) -> dict:
         "themeColor": meta["color"].replace("#", ""),
         "summary":    f"Alerte {meta['label']} — {alert.get('title')}",
         "sections": [{
-            "activityTitle":    f"{meta['emoji']} Alerte {meta['label']}",
+            "activityTitle":    f"[{meta['label']}]",
             "activitySubtitle": alert.get("title", "Incident detecte"),
             "facts": [
                 {"name": "MITRE",        "value": f"{alert.get('mitre_tactic','N/A')} / {alert.get('mitre_technique','N/A')}"},
@@ -185,7 +221,6 @@ async def send_webhook_alert(alert: dict) -> dict:
         return {"channel": "webhook", "result": "skipped", "reason": "webhook_url_not_configured"}
 
     url = settings.webhook_url
-    # Detecter Teams vs Slack
     if "outlook.office.com" in url or "webhook.office.com" in url:
         payload = _build_teams_payload(alert)
     else:
@@ -214,14 +249,13 @@ async def send_sms_alert(alert: dict) -> dict:
 
     meta = _get_meta(alert.get("severity", "critical"))
     body = (
-        f"[Smart SIEM] {meta['emoji']} ALERTE CRITIQUE\n"
+        f"[Smart SIEM] [{meta['label']}]\n"
         f"{alert.get('title', 'Incident')[:60]}\n"
         f"IP: {alert.get('source_ip') or 'inconnue'}\n"
         f"ID: {alert.get('alert_id') or '—'}"
     )
 
     def _send():
-        # Import Twilio uniquement si configure (optionnel)
         try:
             from twilio.rest import Client
             client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
@@ -244,10 +278,7 @@ async def send_sms_alert(alert: dict) -> dict:
 # ── Pipeline multicanal ───────────────────────────────────────────────────────
 
 async def notify_all(alert: dict) -> dict:
-    """
-    Envoie sur tous les canaux configures en parallele.
-    Retourne un rapport par canal.
-    """
+    """Envoie sur tous les canaux configures en parallele. Retourne un rapport par canal."""
     tasks = [
         send_email_alert(alert),
         send_webhook_alert(alert),
@@ -260,7 +291,6 @@ async def notify_all(alert: dict) -> dict:
             channels[str(r)] = {"result": "exception", "detail": str(r)}
         elif isinstance(r, dict):
             channels[r.get("channel", "unknown")] = r
-
     return channels
 
 
