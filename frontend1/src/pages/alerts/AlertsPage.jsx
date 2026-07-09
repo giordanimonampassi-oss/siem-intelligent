@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
+ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { alertsAPI, playbooksAPI } from '../../api/index.js'
+import { alertsAPI, playbooksAPI, firewallAPI } from '../../api/index.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { useModal } from '../../hooks/useAlerts.js'
@@ -12,7 +12,7 @@ import Modal from '../../components/ui/Modal.jsx'
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx'
 import {
   FiAlertCircle, FiFilter, FiRefreshCw, FiSearch,
-  FiEye, FiCheck, FiCheckCircle, FiCpu, FiX
+  FiEye, FiCheck, FiCheckCircle, FiCpu, FiX, FiShieldOff, FiAlertTriangle
 } from 'react-icons/fi'
 import { formatDistanceToNow, format } from 'date-fns'
 import { fr, enUS } from 'date-fns/locale'
@@ -43,6 +43,11 @@ export default function AlertsPage() {
   const pbModal  = useModal()
   const [confirm, setConfirm] = useState(null)
 
+  // ── Blocage IP rapide ──────────────────────────────────────────────────
+  const [blockTarget, setBlockTarget] = useState(null)   // { ip } en attente de confirmation
+  const [blockingIp,  setBlockingIp]  = useState(null)   // ip en cours de blocage
+  const [blockedIps,  setBlockedIps]  = useState(new Set()) // suivi optimiste local
+
   const SIZE = 20
 
   const load = async () => {
@@ -58,7 +63,6 @@ export default function AlertsPage() {
       setAlerts(items)
       setTotal(data.total || items.length)
 
-      // Ouvrir automatiquement si navigué avec un ID
       if (location.state?.selectedId) {
         const found = items.find(a => a.id === location.state.selectedId)
         if (found) setSelected(found)
@@ -100,6 +104,27 @@ export default function AlertsPage() {
     finally { setConfirm(null) }
   }
 
+  // ── Blocage IP : confirmation puis appel API ───────────────────────────
+  const handleBlockClick = (ip) => {
+    setBlockTarget({ ip })
+  }
+
+  const confirmBlock = async () => {
+    if (!blockTarget) return
+    const { ip } = blockTarget
+    setBlockingIp(ip)
+    try {
+      await firewallAPI.blockIp(ip, 'Blocage manuel depuis la page Alertes')
+      toast.success(`IP ${ip} bloquée`)
+      setBlockedIps(prev => new Set(prev).add(ip))
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setBlockingIp(null)
+      setBlockTarget(null)
+    }
+  }
+
   const SEV_BORDER = {
     CRITICAL: 'var(--sev-critical)',
     HIGH:     'var(--sev-high)',
@@ -122,7 +147,7 @@ export default function AlertsPage() {
             <FiRefreshCw size={14} />
           </button>
           <button className="btn btn-danger btn-sm" onClick={() => navigate('/crisis')}>
-            🔴 {t('alerts.crisisRoom')}
+            <FiAlertTriangle size={16} />  {t('alerts.crisisRoom')}
           </button>
         </div>
       </div>
@@ -180,92 +205,109 @@ export default function AlertsPage() {
         ) : (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {alerts.map(alert => (
-                <div
-                  key={alert.id}
-                  onClick={() => setSelected(alert)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '14px 20px',
-                    borderBottom: '1px solid var(--border-subtle)',
-                    borderLeft: `4px solid ${SEV_BORDER[alert.severity] || 'var(--border-color)'}`,
-                    cursor: 'pointer',
-                    transition: 'background 0.15s',
-                    background: selected?.id === alert.id ? 'var(--bg-hover)' : undefined,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = selected?.id === alert.id ? 'var(--bg-hover)' : ''}
-                >
-                  {/* Sévérité */}
-                  <Badge value={alert.severity} pulse={alert.severity === 'CRITICAL' && alert.status === 'NEW'} />
+              {alerts.map(alert => {
+                const isBlocked  = alert.source_ip && blockedIps.has(alert.source_ip)
+                const isBlocking = blockingIp === alert.source_ip
+                return (
+                  <div
+                    key={alert.id}
+                    onClick={() => setSelected(alert)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '14px 20px',
+                      borderBottom: '1px solid var(--border-subtle)',
+                      borderLeft: `4px solid ${SEV_BORDER[alert.severity] || 'var(--border-color)'}`,
+                      cursor: 'pointer',
+                      transition: 'background 0.15s',
+                      background: selected?.id === alert.id ? 'var(--bg-hover)' : undefined,
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = selected?.id === alert.id ? 'var(--bg-hover)' : ''}
+                  >
+                    {/* Sévérité */}
+                    <Badge value={alert.severity} pulse={alert.severity === 'CRITICAL' && alert.status === 'NEW'} />
 
-                  {/* Titre + MITRE */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: '0.875rem', fontWeight: 600,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {alert.title || alert.alert_id || 'Alerte sans titre'}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>
-                      {alert.source_ip && (
-                        <code style={{ fontSize: '0.72rem', color: 'var(--accent-teal)' }}>
-                          {alert.source_ip}
-                        </code>
-                      )}
-                      {alert.mitre_tactic && (
-                        <span style={{
-                          fontSize: '0.68rem', color: 'var(--text-muted)',
-                          fontFamily: 'JetBrains Mono',
-                        }}>
-                          {alert.mitre_tactic} · {alert.mitre_technique}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Confiance */}
-                  {alert.confidence != null && (
-                    <div style={{ textAlign: 'center', minWidth: 52 }}>
+                    {/* Titre + MITRE */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        fontSize: '0.9rem', fontWeight: 700,
-                        color: alert.confidence > 0.8 ? 'var(--sev-critical)' : 'var(--sev-warning)',
+                        fontSize: '0.875rem', fontWeight: 600,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
-                        {Math.round(alert.confidence * 100)}%
+                        {alert.title || alert.alert_id || 'Alerte sans titre'}
                       </div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                        {t('alerts.confidence')}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {alert.source_ip && (
+                          <code style={{ fontSize: '0.72rem', color: 'var(--accent-teal)' }}>
+                            {alert.source_ip}
+                          </code>
+                        )}
+                        {alert.mitre_tactic && (
+                          <span style={{
+                            fontSize: '0.68rem', color: 'var(--text-muted)',
+                            fontFamily: 'JetBrains Mono',
+                          }}>
+                            {alert.mitre_tactic} · {alert.mitre_technique}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  )}
 
-                  {/* Heure */}
-                  <div style={{
-                    fontSize: '0.72rem', color: 'var(--text-muted)',
-                    whiteSpace: 'nowrap', minWidth: 80, textAlign: 'right',
-                  }}>
-                    {alert.created_at
-                      ? formatDistanceToNow(new Date(alert.created_at), { addSuffix: true, locale })
-                      : '—'}
+                    {/* Confiance */}
+                    {alert.confidence != null && (
+                      <div style={{ textAlign: 'center', minWidth: 52 }}>
+                        <div style={{
+                          fontSize: '0.9rem', fontWeight: 700,
+                          color: alert.confidence > 0.8 ? 'var(--sev-critical)' : 'var(--sev-warning)',
+                        }}>
+                          {Math.round(alert.confidence * 100)}%
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                          {t('alerts.confidence')}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Heure */}
+                    <div style={{
+                      fontSize: '0.72rem', color: 'var(--text-muted)',
+                      whiteSpace: 'nowrap', minWidth: 80, textAlign: 'right',
+                    }}>
+                      {alert.created_at
+                        ? formatDistanceToNow(new Date(alert.created_at), { addSuffix: true, locale })
+                        : '—'}
+                    </div>
+
+                    {/* Statut */}
+                    <Badge value={alert.status} />
+
+                    {/* Actions (analyste seulement) */}
+                    {isAnalyst && (
+                      <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+                        {alert.status === 'NEW' && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => handleAcknowledge(alert.id)}
+                            title={t('alerts.acknowledge')}
+                          >
+                            <FiCheck size={13} />
+                          </button>
+                        )}
+                        {alert.source_ip && (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            disabled={isBlocked || isBlocking}
+                            onClick={() => handleBlockClick(alert.source_ip)}
+                            title={isBlocked ? `${alert.source_ip} déjà bloquée` : `Bloquer ${alert.source_ip}`}
+                          >
+                            <FiShieldOff size={13} />
+                            {isBlocked ? 'Bloquée' : isBlocking ? '…' : 'Bloquer'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
-
-                  {/* Statut */}
-                  <Badge value={alert.status} />
-
-                  {/* Actions (analyste seulement) */}
-                  {isAnalyst && alert.status === 'NEW' && (
-                    <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handleAcknowledge(alert.id)}
-                        title={t('alerts.acknowledge')}
-                      >
-                        <FiCheck size={13} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
             <Pagination page={page} total={total} size={SIZE} onChange={setPage} />
           </>
@@ -349,6 +391,18 @@ export default function AlertsPage() {
                   onClick={() => { pbModal.open(selected); setSelected(null) }}>
                   <FiCpu size={14} /> {t('alerts.runPlaybook')}
                 </button>
+                {selected.source_ip && (
+                  <button
+                    className="btn btn-danger"
+                    disabled={blockedIps.has(selected.source_ip) || blockingIp === selected.source_ip}
+                    onClick={() => handleBlockClick(selected.source_ip)}
+                  >
+                    <FiShieldOff size={14} />
+                    {blockedIps.has(selected.source_ip)
+                      ? `${selected.source_ip} déjà bloquée`
+                      : `Bloquer ${selected.source_ip}`}
+                  </button>
+                )}
                 <button className="btn btn-ghost"
                   onClick={() => navigate('/logs', { state: { pivot: selected.source_ip } })}>
                   <FiSearch size={14} /> {t('logs.pivotOn')} {selected.source_ip}
@@ -368,6 +422,17 @@ export default function AlertsPage() {
         confirmLabel="Résoudre"
         onConfirm={confirmResolve}
         onCancel={() => setConfirm(null)}
+      />
+
+      {/* Confirm blocage IP */}
+      <ConfirmDialog
+        isOpen={!!blockTarget}
+        title="Bloquer cette adresse IP ?"
+        message={blockTarget ? `${blockTarget.ip} sera bloquée pendant 60 minutes (blocage applicatif Smart SIEM).` : ''}
+        type="danger"
+        confirmLabel="Bloquer"
+        onConfirm={confirmBlock}
+        onCancel={() => setBlockTarget(null)}
       />
     </div>
   )

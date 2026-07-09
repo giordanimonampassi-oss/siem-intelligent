@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from api.v1.dependencies import get_db, get_current_user, require_admin
+from api.v1.dependencies import get_db, get_current_user, require_admin, require_auditor
 from models.user import CTSUser
 from models.audit_log import AuditLog
 from schemas.user_schemas import (
@@ -152,7 +152,7 @@ async def create_user(
 
 
 @router.get("/users", response_model=list[UserResponse],
-            dependencies=[Depends(require_admin)])
+            dependencies=[Depends(require_auditor)])
 async def list_users(
     db: AsyncSession = Depends(get_db),
     skip: int = 0,
@@ -232,27 +232,45 @@ async def get_audit_log(
     skip: int = 0,
     limit: int = 100,
 ):
-    """
-    Retourne les dernières entrées d'audit.
-    Accessible aux AUDITOR et ADMIN uniquement.
-    """
-    allowed = ["AUDITOR", "ADMIN"]
+    """Retourne les dernieres entrees d'audit, avec le username joint (AUDITOR/ADMIN)."""
+    allowed = ["auditor", "admin"]
     if current_user.role not in allowed:
         raise HTTPException(status_code=403, detail="Réservé aux auditeurs et administrateurs")
 
     result = await db.execute(
-        select(AuditLog).order_by(AuditLog.created_at.desc()).offset(skip).limit(limit)
+        select(AuditLog, CTSUser.username)
+        .outerjoin(CTSUser, CTSUser.id == AuditLog.user_id)
+        .order_by(AuditLog.created_at.desc())
+        .offset(skip).limit(limit)
     )
-    logs = result.scalars().all()
+    rows = result.all()
     return [
         {
             "id":            str(l.id),
             "user_id":       str(l.user_id) if l.user_id else None,
+            "username":      username,
             "action":        l.action,
             "target_entity": l.target_entity,
+            "target":        l.target_entity,  # alias, le frontend lit "target"
             "ip_address":    l.ip_address,
             "result":        l.result,
             "created_at":    l.created_at.isoformat(),
         }
-        for l in logs
+        for l, username in rows
     ]
+
+
+@router.get("/stats", tags=["Audit"])
+async def get_auth_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: CTSUser = Depends(get_current_user),
+):
+    """Petit endpoint de stats accessible AUDITOR/RSSI/ADMIN (pas juste ADMIN)."""
+    allowed = ["auditor", "admin", "rssi"]
+    if current_user.role not in allowed:
+        raise HTTPException(status_code=403, detail="Accès réservé")
+    from sqlalchemy import func
+    active_users = (await db.execute(
+        select(func.count(CTSUser.id)).where(CTSUser.is_active == True)
+    )).scalar_one()
+    return {"active_users": active_users}

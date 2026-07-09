@@ -61,8 +61,13 @@ const load = async () => {                    // ← async ici
           <button className="btn btn-secondary btn-sm" onClick={load}>
             <FiRefreshCw size={14} /> {t('common.refresh')}
           </button>
-          <button className="btn btn-danger btn-sm" onClick={() => navigate('/crisis')}>
-            🔴 {t('dashboard.crisisRoom')}
+          <button 
+            className="btn btn-danger btn-sm" 
+            onClick={() => navigate('/crisis')}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <FiAlertTriangle size={16} /> 
+            {t('dashboard.crisisRoom')}
           </button>
         </div>
       </div>

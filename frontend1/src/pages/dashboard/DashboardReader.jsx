@@ -3,9 +3,16 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { alertsAPI } from '../../api/index.js'
 import { Card, Badge } from '../../components/ui/index.jsx'
-import { FiShield, FiRefreshCw, FiArrowRight } from 'react-icons/fi'
+import { FiShield, FiRefreshCw, FiArrowRight, FiCheckCircle, FiAlertTriangle } from 'react-icons/fi'
 import { formatDistanceToNow } from 'date-fns'
 import { fr, enUS } from 'date-fns/locale'
+
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return null
+}
 
 export default function DashboardReader() {
   const { t, i18n } = useTranslation()
@@ -20,10 +27,10 @@ export default function DashboardReader() {
   const load = async () => {
     try {
       const [aRes, sRes] = await Promise.all([
-        alertsAPI.list({ size: 12, sort: '-created_at' }),
+        alertsAPI.list({ size: 12 }),
         alertsAPI.getStats(),
       ])
-      setAlerts(aRes.data?.items || aRes.data || [])
+      setAlerts(extractList(aRes.data) ?? [])
       setStats(sRes.data || {})
       setLastUpd(new Date())
     } catch { /* silencieux */ }
@@ -32,12 +39,16 @@ export default function DashboardReader() {
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 15000)
-    return () => clearInterval(t)
+    const timer = setInterval(load, 15000)
+    return () => clearInterval(timer)
   }, [])
 
-  const hasCritical = alerts.some(a => a.severity === 'CRITICAL' && a.status === 'NEW')
-  const critCount   = alerts.filter(a => a.severity === 'CRITICAL' && a.status === 'NEW').length
+  const hasCritical = Array.isArray(alerts) && alerts.some(a => a.severity === 'CRITICAL' && a.status === 'NEW')
+  const critCount   = Array.isArray(alerts) ? alerts.filter(a => a.severity === 'CRITICAL' && a.status === 'NEW').length : 0
+
+  // AlertStatsResponse n'a pas de champ "total_active" : on le derive de
+  // by_status (NEW + ACKNOWLEDGED = pas encore resolues).
+  const totalActive = (stats.by_status?.NEW || 0) + (stats.by_status?.ACKNOWLEDGED || 0)
 
   return (
     <div>
@@ -83,7 +94,7 @@ export default function DashboardReader() {
               fontSize: '1.8rem',
               animation: hasCritical ? 'pulse-error 1.5s infinite' : undefined,
             }}>
-              {hasCritical ? '🔴' : '✅'}
+              {hasCritical ? <FiAlertTriangle /> : <FiCheckCircle />}
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{
@@ -93,7 +104,7 @@ export default function DashboardReader() {
                 {hasCritical ? `${critCount} incident(s) critique(s)` : t('dashboard.noCritical')}
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                {stats.total_active || 0} alertes actives au total
+                {totalActive} alertes actives au total
               </div>
             </div>
           </div>
@@ -136,7 +147,7 @@ export default function DashboardReader() {
               boxShadow: 'var(--shadow-glow-critical)',
             }}
           >
-            🔴 {t('dashboard.openCrisisRoom')}
+            <FiAlertTriangle size={16} /> {t('dashboard.openCrisisRoom')}
           </button>
         ) : (
           <div style={{
@@ -147,7 +158,7 @@ export default function DashboardReader() {
             borderRadius: 12, color: 'var(--sev-success)',
             fontSize: '0.95rem', fontWeight: 600,
           }}>
-            ✅ {t('dashboard.noCritical')}
+            <FiCheckCircle size={16} /> {t('dashboard.noCritical')}
           </div>
         )}
       </div>

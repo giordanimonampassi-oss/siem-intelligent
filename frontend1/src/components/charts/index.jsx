@@ -2,7 +2,7 @@ import React from 'react'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  LineChart, Line,
+  LineChart, Line, AreaChart, Area,
 } from 'recharts'
 
 const COLORS = {
@@ -29,14 +29,20 @@ const TooltipBox = ({ active, payload }) => {
 
 // ── Donut alertes par type ────────────────────────────────────────────────
 export function AlertsDonutChart({ data = [] }) {
-  const chartData = data.length > 0 ? data : [
-    { name: 'AUTH',        value: 35 },
-    { name: 'NETWORK',     value: 28 },
-    { name: 'SYSTEM',      value: 22 },
-    { name: 'APPLICATION', value: 15 },
-  ]
+  if (!data || data.length === 0) {
+    return (
+      <div style={{
+        height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center',
+      }}>
+        Aucune donnée sur cette période
+      </div>
+    )
+  }
+ 
+  const chartData = data
   const total = chartData.reduce((s, d) => s + d.value, 0)
-
+ 
   return (
     <ResponsiveContainer width="100%" height={200}>
       <PieChart>
@@ -52,7 +58,7 @@ export function AlertsDonutChart({ data = [] }) {
           ))}
         </Pie>
         <Tooltip
-          formatter={(v) => [`${v} (${((v/total)*100).toFixed(0)}%)`, '']}
+          formatter={(v) => [`${v} (${total > 0 ? ((v / total) * 100).toFixed(0) : 0}%)`, '']}
           contentStyle={{
             background: 'var(--bg-tertiary)',
             border: '1px solid var(--border-color)',
@@ -79,7 +85,7 @@ export default function TopIPsChart({ data = [] }) {
         color: 'var(--text-muted)', 
         fontSize: '0.9rem' 
       }}>
-        Aucune IP source détectée pour le moment
+        Aucune IP source détectée ces dernières 24h
       </div>
     )
   }
@@ -189,7 +195,7 @@ export function UEBAScoreChart({ data = [] }) {
         <XAxis dataKey="day" hide />
         <YAxis domain={[0, 100]} hide />
         <Tooltip
-          formatter={(v) => [v.toFixed(1), 'Score']}
+          formatter={(v) => [Number(v).toFixed(1), 'Score']}
           contentStyle={{
             background: 'var(--bg-tertiary)',
             border: '1px solid var(--border-color)',

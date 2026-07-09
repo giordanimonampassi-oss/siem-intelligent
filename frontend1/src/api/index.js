@@ -35,6 +35,11 @@ export const alertsAPI = {
 
   cancelExecution: (execId) =>
     client.post(`/alerts/executions/${execId}/cancel`),
+  getTopRules: (days = 7, limit = 5) =>
+  client.get('/alerts/top-rules', { params: { days, limit } }),
+
+  getRSSIMetrics: (days = 7) =>
+  client.get('/alerts/rssi-metrics', { params: { days } }),
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -288,8 +293,22 @@ export const rulesAPI = {
     client.post('/rules/seed-mitre'),
 }
 
+// ── Blocage IP (Module 3 — SOAR manuel) ──────────────────────────────────
+export const firewallAPI = {
+  listBlocked: (params = {}) =>
+    client.get('/firewall/blocked-ips', { params }),
+
+  blockIp: (ip_address, reason) =>
+    client.post('/firewall/blocked-ips', { ip_address, reason }),
+
+  unblockIp: (ip_address) =>
+    client.post(`/firewall/blocked-ips/${ip_address}/unblock`),
+}
+
 // Health global (root)
 export async function getSystemHealth() {
   const { data } = await client.get('/health')   // existe selon Swagger
   return data
 }
+
+

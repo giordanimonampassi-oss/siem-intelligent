@@ -170,3 +170,75 @@ async def confirm_execution(
     await execute_playbook(ex, alert, db)
     await db.refresh(ex)
     return ex
+
+from datetime import timedelta
+
+async def get_top_rules(db: AsyncSession, days: int = 7, limit: int = 5):
+    """Top des regles de correlation par nombre d'alertes declenchees, vrai GROUP BY."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (await db.execute(
+        select(
+            CorrelationRule.id, CorrelationRule.name, CorrelationRule.mitre_tactic,
+            CorrelationRule.mitre_technique, func.count(Alert.id).label("count")
+        )
+        .join(Alert, Alert.rule_id == CorrelationRule.id)
+        .where(Alert.triggered_at >= since)
+        .group_by(CorrelationRule.id)
+        .order_by(desc("count"))
+        .limit(limit)
+    )).all()
+    return [
+        {"rule_id": str(r.id), "name": r.name, "mitre_tactic": r.mitre_tactic,
+         "mitre_technique": r.mitre_technique, "count": r.count}
+        for r in rows
+    ]
+
+
+async def get_rssi_metrics(db: AsyncSession, days: int = 7) -> dict:
+    """
+    Metriques RSSI reellement calculees (pas de faux 'taux de detection' —
+    on ne peut pas mesurer un vrai taux de detection sans verite terrain,
+    donc on expose des indicateurs honnetes a la place).
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # Temps de reponse moyen REEL : triggered_at -> acknowledged_at
+    ack_alerts = (await db.execute(
+        select(Alert.triggered_at, Alert.acknowledged_at)
+        .where(and_(Alert.acknowledged_at.isnot(None), Alert.triggered_at >= since))
+    )).all()
+    avg_response_seconds = (
+        sum((a.acknowledged_at - a.triggered_at).total_seconds() for a in ack_alerts) / len(ack_alerts)
+        if ack_alerts else None
+    )
+
+    # Confiance moyenne des alertes declenchees (proxy honnete, pas un "taux de detection")
+    avg_conf = (await db.execute(
+        select(func.avg(Alert.confidence)).where(Alert.triggered_at >= since)
+    )).scalar_one()
+
+    # Couverture MITRE : tactiques du referentiel de l'annexe couvertes par >= 1 regle active
+    REFERENCE_TACTICS = ["Initial Access", "Lateral Movement", "Exfiltration", "Defense Evasion"]
+    covered = set((await db.execute(
+        select(CorrelationRule.mitre_tactic)
+        .where(CorrelationRule.is_active == True, CorrelationRule.mitre_tactic.isnot(None))
+        .distinct()
+    )).scalars().all())
+    mitre_coverage_pct = round(
+        100 * len([t for t in REFERENCE_TACTICS if t in covered]) / len(REFERENCE_TACTICS), 1
+    )
+
+    # Couverture UEBA : proportion de profils avec une baseline calculee
+    from models.ueba import UserBehaviorProfile
+    total_profiles = (await db.execute(select(func.count(UserBehaviorProfile.id)))).scalar_one()
+    profiled = (await db.execute(
+        select(func.count(UserBehaviorProfile.id)).where(UserBehaviorProfile.avg_login_hour.isnot(None))
+    )).scalar_one()
+    ueba_coverage_pct = round(100 * profiled / total_profiles, 1) if total_profiles else 0.0
+
+    return {
+        "avg_response_seconds": avg_response_seconds,
+        "avg_confidence": float(avg_conf) if avg_conf is not None else None,
+        "mitre_coverage_pct": mitre_coverage_pct,
+        "ueba_coverage_pct": ueba_coverage_pct,
+    }

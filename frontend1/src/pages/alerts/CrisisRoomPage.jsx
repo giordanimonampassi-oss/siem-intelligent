@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { alertsAPI, playbooksAPI } from '../../api/index.js'
-import { FiX, FiCheckCircle, FiLoader } from 'react-icons/fi'
+import { searchLogs } from '../../api/logs.js'
+import { FiX, FiCheckCircle, FiLoader, FiAlertTriangle } from 'react-icons/fi'
 import { format } from 'date-fns'
 
 const REFRESH_SEC = 5
@@ -17,11 +18,10 @@ export default function CrisisRoomPage() {
   const [elapsed, setElapsed]     = useState(0)
   const [countdown, setCountdown] = useState(REFRESH_SEC)
   const startRef  = useRef(Date.now())
-  const feedIdRef = useRef(0)
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, execRes, criticalRes] = await Promise.all([
+      const [statsRes, execRes, criticalRes, logsRes] = await Promise.all([
         alertsAPI.getStats(),
         // PlaybookStatus.RUNNING = "running" (minuscules) côté backend
         playbooksAPI.getExecutions({ size: 6, status: 'running' }).catch(() => ({ data: [] })),
@@ -29,6 +29,9 @@ export default function CrisisRoomPage() {
         // l'approxime par le nombre d'hôtes distincts touchés par des
         // alertes CRITICAL non résolues.
         alertsAPI.list({ severity: 'CRITICAL', status: 'NEW', size: 50 }).catch(() => ({ data: { results: [] } })),
+        // Flux d'événements en direct : vrais logs récents, plus de simulation.
+        // search_logs_pg/es trient déjà par timestamp DESC côté backend.
+        searchLogs({ page: 1, size: 10, engine: 'pg' }).catch(() => ({ results: [] })),
       ])
       const stats = statsRes.data || {}
       const criticalAlerts = criticalRes.data?.results || []
@@ -41,6 +44,20 @@ export default function CrisisRoomPage() {
         compromised: compromisedHosts.size,
       })
       setExecutions(execRes.data || [])
+
+      // LogSeverity backend = info/warning/critical (minuscules, pas de HIGH
+      // pour les logs bruts — contrairement aux alertes). On uppercase pour
+      // rester cohérent avec SEV_COLOR ci-dessous.
+      const logs = logsRes.results || []
+      setLogFeed(
+        logs.map((log) => ({
+          id: log.id,
+          time: log.timestamp ? format(new Date(log.timestamp), 'HH:mm:ss') : '—',
+          sev: (log.severity || 'info').toUpperCase(),
+          ip: log.source_ip || '—',
+          msg: log.raw_message || `Événement ${log.log_type || ''}`.trim(),
+        }))
+      )
     } catch { /* silencieux */ }
     setCountdown(REFRESH_SEC)
   }, [])
@@ -53,7 +70,7 @@ export default function CrisisRoomPage() {
     return () => clearInterval(t)
   }, [])
 
-  // Refresh auto toutes les 5s
+  // Refresh auto toutes les 5s (stats + executions + alertes + logs)
   useEffect(() => {
     load()
     const t = setInterval(load, REFRESH_SEC * 1000)
@@ -63,24 +80,6 @@ export default function CrisisRoomPage() {
   // Countdown visuel
   useEffect(() => {
     const t = setInterval(() => setCountdown(c => c > 0 ? c - 1 : REFRESH_SEC), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  // Simuler un feed de logs scrollable (à remplacer par WS réel)
-  useEffect(() => {
-    const t = setInterval(() => {
-      feedIdRef.current++
-      const sevs = ['CRITICAL', 'HIGH', 'WARNING', 'INFO']
-      const sev  = sevs[Math.floor(Math.random() * sevs.length)]
-      const ips  = ['178.43.12.87', '45.33.32.156', '203.0.113.47', '10.0.0.5']
-      const ip   = ips[Math.floor(Math.random() * ips.length)]
-      setLogFeed(prev => [{
-        id: feedIdRef.current,
-        time: format(new Date(), 'HH:mm:ss'),
-        sev, ip,
-        msg: `Event detected from ${ip}`,
-      }, ...prev].slice(0, 30))
-    }, 2500)
     return () => clearInterval(t)
   }, [])
 
@@ -105,7 +104,7 @@ export default function CrisisRoomPage() {
         <div className="crisis-indicator">
           <span className="crisis-dot" />
           <span className="crisis-title">
-            🔴 {t('alerts.activeIncident')} — {data.critical > 0 ? 'CRITICAL' : 'STABLE'}
+            <FiAlertTriangle size={25} /> {t('alerts.activeIncident')} — {data.critical > 0 ? 'CRITICAL' : 'STABLE'}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -159,19 +158,24 @@ export default function CrisisRoomPage() {
             Flux d'événements en direct
           </div>
           <div style={{ flex: 1, overflowY: 'auto', fontFamily: 'JetBrains Mono', fontSize: '0.78rem' }}>
-            {logFeed.map(entry => (
+            {logFeed.length === 0 ? (
+              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }}>
+                Aucun événement récent
+              </p>
+            ) : logFeed.map(entry => (
               <div key={entry.id} style={{
                 display: 'flex', gap: 10, padding: '6px 0',
                 borderBottom: '1px solid rgba(255,255,255,0.04)',
                 color: 'rgba(255,255,255,0.7)',
-                animation: 'fadeIn 0.3s ease',
               }}>
                 <span style={{ color: 'rgba(255,255,255,0.3)' }}>{entry.time}</span>
-                <span style={{ color: SEV_COLOR[entry.sev], fontWeight: 700, minWidth: 60 }}>
+                <span style={{ color: SEV_COLOR[entry.sev] || SEV_COLOR.INFO, fontWeight: 700, minWidth: 60 }}>
                   {entry.sev}
                 </span>
                 <span style={{ color: 'var(--accent-teal)' }}>{entry.ip}</span>
-                <span>{entry.msg}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {entry.msg}
+                </span>
               </div>
             ))}
           </div>

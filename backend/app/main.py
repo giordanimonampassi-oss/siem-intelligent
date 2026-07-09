@@ -10,6 +10,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from core.config import settings
 from api.v1.router import api_router
@@ -18,6 +20,7 @@ from services.rule_service import seed_mitre_rules
 from services.ueba_service import snapshot_all_profiles
 from services.soar import sweep_expired_confirmations
 from services.anomaly_detector import run_batch_detection
+from services.firewall_service import is_blocked
 
 
 scheduler = AsyncIOScheduler()
@@ -57,6 +60,18 @@ async def lifespan(app: FastAPI):
     await es_client.close()
     print("Arret.")
 
+class IPBlocklistMiddleware(BaseHTTPMiddleware):
+    """Rejette toute requete provenant d'une IP actuellement bloquee par SOAR."""
+    async def dispatch(self, request, call_next):
+        client_ip = request.client.host if request.client else None
+        if client_ip:
+            async with AsyncSessionLocal() as db:
+                if await is_blocked(db, client_ip):
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": f"Adresse IP {client_ip} bloquee par Smart SIEM"},
+                    )
+        return await call_next(request)
 
 app = FastAPI(
     title="Smart SIEM API",
@@ -127,6 +142,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(IPBlocklistMiddleware)
 
 FRONTEND_ORIGIN = "http://localhost:5173"
  

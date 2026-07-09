@@ -1,33 +1,55 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { alertsAPI, reportsAPI } from '../../api/index.js'
+import { alertsAPI } from '../../api/index.js'
 import { KpiCard, Card, Badge } from '../../components/ui/index.jsx'
 import { IncidentsTrendChart, CircleGauge } from '../../components/charts/index.jsx'
-import { FiBarChart2, FiCheckCircle, FiAlertTriangle, FiArrowRight, FiDownload } from 'react-icons/fi'
+import { FiBarChart2, FiCheckCircle, FiAlertTriangle, FiArrowRight } from 'react-icons/fi'
+
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return null
+}
+
+function formatSeconds(s) {
+  if (s == null) return '—'
+  if (s < 60) return `${s.toFixed(1)}s`
+  return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
+}
 
 export default function DashboardRSSI() {
   const { t }     = useTranslation()
   const navigate  = useNavigate()
-  const [stats,   setStats]   = useState({})
-  const [loading, setLoading] = useState(true)
+  const [stats,    setStats]    = useState({})
+  const [metrics,  setMetrics]  = useState({})
+  const [topRules, setTopRules] = useState([])
+  const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
-    alertsAPI.getStats().then(r => setStats(r.data || {})).finally(() => setLoading(false))
+    Promise.all([
+      alertsAPI.getStats().catch(() => ({ data: {} })),
+      alertsAPI.getRSSIMetrics(7).catch(() => ({ data: {} })),
+      alertsAPI.getTopRules(7, 5).catch(() => ({ data: [] })),
+    ]).then(([sRes, mRes, rRes]) => {
+      setStats(sRes.data || {})
+      setMetrics(mRes.data || {})
+      setTopRules(extractList(rRes.data) ?? [])
+    }).finally(() => setLoading(false))
   }, [])
 
+  const totalActive    = (stats.by_status?.NEW || 0) + (stats.by_status?.ACKNOWLEDGED || 0)
+  const criticalActive = stats.by_severity?.CRITICAL || 0
+  const totalAllTime    = stats.total || 0
+
+  // Conformite : aucun module ne calcule ceci aujourd'hui (pas de moteur
+  // d'audit RGPD/ISO en base) — reste volontairement statique/illustratif.
   const complianceItems = [
     { label: 'RGPD', status: 'ok',      detail: 'Conforme — Dernier audit J-12' },
     { label: 'ISO 27001', status: 'warn', detail: '3 points à traiter' },
-    { label: `Rétention ${t('common.all')} logs`, status: 'ok', detail: '30 jours — Actif' },
+    { label: 'Rétention logs', status: 'ok', detail: '30 jours — Actif' },
     { label: 'MFA Utilisateurs', status: 'ok', detail: '100% activé' },
-  ]
-
-  const topRules = [
-    { name: 'Brute Force SSH (T1110)', count: 142, mitre: 'TA0001' },
-    { name: 'Exfiltration données (T1041)', count: 67, mitre: 'TA0010' },
-    { name: 'Mouvement latéral NTLM', count: 38, mitre: 'TA0008' },
-    { name: 'Suppression logs (T1070)', count: 21, mitre: 'TA0005' },
   ]
 
   return (
@@ -42,61 +64,61 @@ export default function DashboardRSSI() {
         </button>
       </div>
 
-      {/* KPIs RSSI */}
+      {/* KPIs — tous reellement calcules cote backend */}
       <div className="kpi-grid" style={{ marginBottom: 24 }}>
         <KpiCard
-          label="Incidents cette semaine"
-          value={stats.incidents_week || 7}
-          color="high" trend="down"
-          sub="−23% vs semaine précédente"
-        />
-        <KpiCard
-          label={t('dashboard.detectionRate')}
-          value="94%"
-          color="success"
-          sub="Taux de détection MITRE"
-        />
-        <KpiCard
-          label={t('dashboard.avgResponseTime')}
-          value="8.3s"
-          color="teal"
-          sub="Objectif : < 30s ✓"
-        />
-        <KpiCard
           label="Alertes actives"
-          value={stats.total_active || 19}
+          value={totalActive}
           color="critical"
-          sub={`${stats.critical_active || 3} critiques`}
+          sub={`${criticalActive} critiques`}
+        />
+        <KpiCard
+          label="Alertes déclenchées (total)"
+          value={totalAllTime}
+          color="teal"
+          sub="Depuis la mise en service"
+        />
+        <KpiCard
+          label="Temps de réponse moyen"
+          value={formatSeconds(metrics.avg_response_seconds)}
+          color="teal"
+          sub="Déclenchement → acquittement (7 derniers jours)"
+        />
+        <KpiCard
+          label="Confiance moyenne des alertes"
+          value={metrics.avg_confidence != null ? `${Math.round(metrics.avg_confidence * 100)}%` : '—'}
+          color="success"
+          sub="Score de confiance des règles (7 derniers jours)"
         />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        {/* Tendance incidents */}
-        <Card title="Évolution des incidents — 30 jours">
+        {/* Tendance incidents — pas d'endpoint "incidents par jour" encore construit */}
+        <Card title="Évolution des incidents — 30 jours (exemple)">
           <IncidentsTrendChart />
         </Card>
 
-        {/* Taux détection gauge */}
-        <Card title={t('dashboard.detectionRate')}>
+        {/* Gauges — desormais reelles pour MITRE et UEBA */}
+        <Card title="Couverture de détection">
           <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', paddingTop: 8 }}>
             <div style={{ textAlign: 'center' }}>
-              <CircleGauge value={94} size={110} color="var(--sev-success)" />
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8 }}>Taux global</p>
+              <CircleGauge value={Math.round(metrics.mitre_coverage_pct ?? 0)} size={110} color="var(--sev-warning)" />
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8 }}>
+                Couverture MITRE (règles actives)
+              </p>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <CircleGauge value={78} size={110} color="var(--sev-warning)" />
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8 }}>Couverture MITRE</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <CircleGauge value={61} size={110} color="var(--sev-high)" />
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8 }}>UEBA actif</p>
+              <CircleGauge value={Math.round(metrics.ueba_coverage_pct ?? 0)} size={110} color="var(--sev-high)" />
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8 }}>
+                Entités avec baseline UEBA
+              </p>
             </div>
           </div>
         </Card>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* Conformité */}
+        {/* Conformité — reste statique, pas de module d'audit reglementaire en base */}
         <Card title={<><FiCheckCircle size={14} /> {t('dashboard.complianceStatus')}</>}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {complianceItems.map(item => (
@@ -122,39 +144,48 @@ export default function DashboardRSSI() {
           </div>
         </Card>
 
-        {/* Top règles déclenchées */}
+        {/* Top règles — desormais un vrai GROUP BY sur Alert.rule_id */}
         <Card
-          title="Top règles déclenchées cette semaine"
+          title="Top règles déclenchées — 7 derniers jours"
           actions={
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('/reports')}>
               {t('common.viewAll')} <FiArrowRight size={13} />
             </button>
           }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {topRules.map((r, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                <span style={{
-                  fontSize: '0.7rem', fontWeight: 700,
-                  color: 'var(--text-muted)',
-                  width: 18, flexShrink: 0,
-                }}>#{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
+          {loading ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
+              {t('common.loading')}
+            </div>
+          ) : topRules.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Aucune règle déclenchée sur cette période
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {topRules.map((r, i) => (
+                <div key={r.rule_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{
+                    fontSize: '0.7rem', fontWeight: 700,
+                    color: 'var(--text-muted)', width: 18, flexShrink: 0,
+                  }}>#{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.82rem', whiteSpace: 'nowrap',
+                      overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>{r.name}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {r.mitre_tactic || 'N/A'} {r.mitre_technique ? `· ${r.mitre_technique}` : ''}
+                    </div>
+                  </div>
                   <div style={{
-                    fontSize: '0.82rem', whiteSpace: 'nowrap',
-                    overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{r.name}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{r.mitre}</div>
+                    fontSize: '0.85rem', fontWeight: 700,
+                    color: i === 0 ? 'var(--sev-critical)' : 'var(--text-secondary)',
+                  }}>{r.count}</div>
                 </div>
-                <div style={{
-                  fontSize: '0.85rem', fontWeight: 700,
-                  color: i === 0 ? 'var(--sev-critical)' : 'var(--text-secondary)',
-                }}>{r.count}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </div>

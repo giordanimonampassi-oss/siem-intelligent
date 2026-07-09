@@ -6,6 +6,16 @@ import { CircleGauge, UEBAScoreChart } from '../../components/charts/index.jsx'
 import { FiSearch, FiActivity, FiClock, FiDatabase, FiAlertTriangle } from 'react-icons/fi'
 import { format } from 'date-fns'
 
+// ── Helper partagé : extrait un tableau quel que soit le format de réponse ──
+// Le backend renvoie { total, results: [...] }. On tolère aussi { items } ou
+// un tableau brut, et on ne renvoie jamais autre chose qu'un vrai tableau.
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return null
+}
+
 function riskLevel(score) {
   if (score >= 75) return { key: 'critical', color: 'var(--sev-critical)' }
   if (score >= 50) return { key: 'high',     color: 'var(--sev-high)' }
@@ -25,9 +35,10 @@ export default function UEBAPage() {
     setLoading(true)
     try {
       const { data } = await uebaAPI.listProfiles()
-      const items = data.items || data || mockProfiles()
-      setProfiles(items)
-      if (items.length > 0 && !selected) selectProfile(items[0])
+      const items = extractList(data)
+      const finalItems = items ?? mockProfiles()
+      setProfiles(finalItems)
+      if (finalItems.length > 0) selectProfile(finalItems[0])
     } catch {
       const items = mockProfiles()
       setProfiles(items)
@@ -47,7 +58,8 @@ export default function UEBAPage() {
     setSelected(profile)
     try {
       const { data } = await uebaAPI.getAnomalies(profile.entity_id)
-      setAnomalies(data.items || data || mockAnomalies())
+      const items = extractList(data)
+      setAnomalies(items ?? mockAnomalies())
     } catch {
       setAnomalies(mockAnomalies())
     }
@@ -63,9 +75,9 @@ export default function UEBAPage() {
 
   useEffect(() => { load() }, [])
 
-  const filtered = profiles.filter(p =>
-    p.entity_id.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = Array.isArray(profiles)
+    ? profiles.filter(p => p?.entity_id?.toLowerCase().includes(search.toLowerCase()))
+    : []
 
   const risk = selected ? riskLevel(selected.risk_score) : null
 
@@ -92,38 +104,46 @@ export default function UEBAPage() {
             <input className="input" placeholder={t('ueba.searchEntity')}
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {filtered.map(p => {
-              const r = riskLevel(p.risk_score)
-              return (
-                <div key={p.entity_id}
-                  onClick={() => selectProfile(p)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                    background: selected?.entity_id === p.entity_id ? 'var(--bg-hover)' : 'transparent',
-                    border: `1px solid ${selected?.entity_id === p.entity_id ? 'var(--accent-teal)' : 'transparent'}`,
-                  }}
-                >
-                  <div style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: r.color, flexShrink: 0,
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.entity_id}
+          {loading ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
+              {t('common.loading')}
+            </div>
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={<FiActivity size={30} />} title="Aucun profil" />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {filtered.map(p => {
+                const r = riskLevel(p.risk_score)
+                return (
+                  <div key={p.entity_id}
+                    onClick={() => selectProfile(p)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                      background: selected?.entity_id === p.entity_id ? 'var(--bg-hover)' : 'transparent',
+                      border: `1px solid ${selected?.entity_id === p.entity_id ? 'var(--accent-teal)' : 'transparent'}`,
+                    }}
+                  >
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: r.color, flexShrink: 0,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.entity_id}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {p.entity_type === 'user' ? 'Utilisateur' : 'Machine'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      {p.entity_type === 'user' ? 'Utilisateur' : 'Machine'}
-                    </div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: r.color }}>
+                      {p.risk_score}
+                    </span>
                   </div>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: r.color }}>
-                    {p.risk_score}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </Card>
 
         {/* Détail entité */}
@@ -162,7 +182,7 @@ export default function UEBAPage() {
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8 }}>
                   {t('ueba.scoreHistory')}
                 </div>
-                <UEBAScoreChart />
+                <UEBAScoreChart entityId={selected.entity_id} />
               </div>
             </Card>
 
@@ -171,14 +191,14 @@ export default function UEBAPage() {
               <Card title={t('ueba.baseline')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <Row label={t('ueba.avgDataVolume')}
-                    value={`${(selected.avg_data_volume / 1024 / 1024).toFixed(1)} MB`} />
+                    value={`${((selected.avg_data_volume || 0) / 1024 / 1024).toFixed(1)} MB`} />
                   <Row label={t('ueba.typicalHours')}
                     value={Object.keys(selected.typical_hours || {}).map(h => `${h}h`).join(', ') || '—'} />
                 </div>
               </Card>
 
               <Card title={t('ueba.anomalies')}>
-                {anomalies.length === 0 ? (
+                {!Array.isArray(anomalies) || anomalies.length === 0 ? (
                   <EmptyState title="Aucune anomalie" />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

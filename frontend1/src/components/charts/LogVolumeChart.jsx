@@ -28,16 +28,22 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function LogVolumeChart({ data = [] }) {
   const { t } = useTranslation()
 
-  // Génère des données simulées si vide
-  const chartData = data.length > 0 ? data : Array.from({ length: 24 }, (_, i) => ({
-    hour: `${String(i).padStart(2, '0')}h`,
-    total:    Math.floor(1200 + Math.random() * 3000),
-    critical: Math.floor(5  + Math.random() * 40),
-  }))
+  // Plus de génération aléatoire : si la base ne renvoie rien (aucun log
+  // sur la période), on affiche un état vide honnête plutôt qu'un faux graphe.
+  if (!data || data.length === 0) {
+    return (
+      <div style={{
+        height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center',
+      }}>
+        Aucun log sur cette période
+      </div>
+    )
+  }
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%"  stopColor="var(--accent-teal)"  stopOpacity={0.3} />

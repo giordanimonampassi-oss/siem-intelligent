@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { playbooksAPI } from '../../api/index.js'
 import { useToast } from '../../context/ToastContext.jsx'
@@ -16,43 +16,77 @@ const PB_ICONS = {
   notification_escalade: <FiSend />,
 }
 
+// ── Le backend renvoie ses enums en anglais (core/constants.py) ────────────
+// PlaybookType   : block_ip | disable_account | escalate
+// PlaybookStatus : pending | running | completed | failed | cancelled
+// Le frontend a été écrit avec des libellés français : on normalise ici,
+// une seule fois, juste après réception des données.
+const PLAYBOOK_MAP = {
+  block_ip:        'blocage_ip',
+  disable_account: 'desactivation_compte',
+  escalate:        'notification_escalade',
+}
+const STATUS_MAP = {
+  pending:   'en_attente',
+  running:   'en_cours',
+  completed: 'termine',
+  failed:    'echec',
+  cancelled: 'annule',
+}
+
+function normalizeExecution(e) {
+  return {
+    ...e,
+    playbook: PLAYBOOK_MAP[e.playbook] || e.playbook,
+    status:   STATUS_MAP[e.status] || e.status,
+  }
+}
+
+// Meme helper que ReportsPage/UEBAPage : tolere {results}, {items} ou tableau brut
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return null
+}
+
 export default function PlaybooksPage() {
   const { t } = useTranslation()
   const toast = useToast()
 
   const [executions, setExecutions] = useState([])
   const [loading,     setLoading]   = useState(true)
-  const [confirmExec, setConfirmExec] = useState(null) // exécution en attente CONFIRM
+  const [confirmExec, setConfirmExec] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
-  const timersRef = useRef({})
 
   const load = async () => {
     setLoading(true)
     try {
       const { data } = await playbooksAPI.getExecutions({ size: 30 })
-      setExecutions(data.items || data || mockExecutions())
-    } catch {
-      setExecutions(mockExecutions())
+      const items = extractList(data)
+      setExecutions((items ?? mockExecutions()).map(normalizeExecution))
+    } catch (err) {
+      console.error('Erreur chargement playbooks:', err)
+      setExecutions(mockExecutions().map(normalizeExecution))
     } finally {
       setLoading(false)
     }
   }
 
-  // Données de démo si l'API n'a pas encore d'exécutions
   function mockExecutions() {
     return [
       {
-        id: 'pb-1', playbook: 'blocage_ip', mode: 'auto', status: 'termine',
+        id: 'pb-1', playbook: 'block_ip', mode: 'auto', status: 'completed',
         target: '178.43.12.87', executed_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
       },
       {
-        id: 'pb-2', playbook: 'desactivation_compte', mode: 'confirm', status: 'en_attente',
+        id: 'pb-2', playbook: 'disable_account', mode: 'confirm', status: 'pending',
         target: 'nina.myers', created_at: new Date().toISOString(),
         confirm_deadline: new Date(Date.now() + 42000).toISOString(),
       },
       {
-        id: 'pb-3', playbook: 'notification_escalade', mode: 'auto', status: 'termine',
+        id: 'pb-3', playbook: 'escalate', mode: 'auto', status: 'completed',
         target: 'SOC Team', executed_at: new Date(Date.now() - 60000).toISOString(),
         created_at: new Date(Date.now() - 60000).toISOString(),
       },
@@ -91,11 +125,6 @@ export default function PlaybooksPage() {
     }
   }
 
-  const STATUS_BADGE = {
-    en_attente: 'WARNING', en_cours: 'INFO',
-    termine: 'success', annule: 'READER', echec: 'CRITICAL',
-  }
-
   return (
     <div>
       <div className="page-header">
@@ -126,7 +155,6 @@ export default function PlaybooksPage() {
         )}
       </Card>
 
-      {/* Confirmation d'exécution manuelle */}
       <ConfirmDialog
         isOpen={!!confirmExec}
         title={t('playbooks.confirmAction')}
@@ -137,7 +165,6 @@ export default function PlaybooksPage() {
         onCancel={() => setConfirmExec(null)}
       />
 
-      {/* Confirmation annulation */}
       <ConfirmDialog
         isOpen={!!cancelTarget}
         title={t('playbooks.cancelAction')}
@@ -151,7 +178,6 @@ export default function PlaybooksPage() {
   )
 }
 
-// ── Carte d'exécution avec countdown live pour le mode CONFIRM ────────────
 function PlaybookExecutionCard({ exec, onConfirm, onCancel }) {
   const { t } = useTranslation()
   const [remaining, setRemaining] = useState(null)
@@ -168,6 +194,10 @@ function PlaybookExecutionCard({ exec, onConfirm, onCancel }) {
   }, [exec])
 
   const isPending = exec.mode === 'confirm' && exec.status === 'en_attente'
+
+  const labelKey = exec.playbook === 'blocage_ip' ? 'blockIP'
+    : exec.playbook === 'desactivation_compte' ? 'disableAccount'
+    : 'escalate'
 
   return (
     <div style={{
@@ -188,7 +218,7 @@ function PlaybookExecutionCard({ exec, onConfirm, onCancel }) {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '0.88rem', fontWeight: 600 }}>
-          {t(`playbooks.${exec.playbook === 'blocage_ip' ? 'blockIP' : exec.playbook === 'desactivation_compte' ? 'disableAccount' : 'escalate'}`)}
+          {t(`playbooks.${labelKey}`)}
         </div>
         <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono' }}>
           {exec.target}
@@ -199,7 +229,8 @@ function PlaybookExecutionCard({ exec, onConfirm, onCancel }) {
       <Badge value={
         exec.status === 'termine' ? 'success' :
         exec.status === 'echec' ? 'CRITICAL' :
-        exec.status === 'annule' ? 'READER' : 'WARNING'
+        exec.status === 'annule' ? 'READER' :
+        exec.status === 'en_cours' ? 'INFO' : 'WARNING'
       } />
 
       {isPending && remaining !== null && (

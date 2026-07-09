@@ -25,19 +25,22 @@ from services.notifier import notify_all, send_email_alert
 
 # ─── Actions (simulees — a remplacer par vraies integrations) ─────────────────
 
-async def _block_ip(ip: str) -> dict:
+async def _block_ip(ip: str, db: AsyncSession) -> dict:
     """
-    Simule le blocage IP sur le pare-feu.
-    Production : appel API pfSense / iptables / Palo Alto.
+    Bloque reellement l'IP au niveau applicatif : toute requete future vers
+    l'API Smart SIEM depuis cette IP sera rejetee (403) par le middleware,
+    tant que le blocage est actif (60 min par defaut).
     """
-    await asyncio.sleep(0.08)
+    from services.firewall_service import block_ip as fw_block_ip
+    entry = await fw_block_ip(db, ip, reason="Blocage automatique SOAR", duration_minutes=60)
     return {
-        "action":    "block_ip",
-        "ip":        ip,
-        "result":    "blocked",
-        "system":    "simulated-firewall",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+        "action":     "block_ip",
+        "ip":         ip,
+        "result":     "blocked",
+        "system":     "application-blocklist",
+        "expires_at": entry.expires_at.isoformat() if entry.expires_at else None,
+        "timestamp":  datetime.now(timezone.utc).isoformat(),
+    } 
 
 
 async def _disable_account(username: str) -> dict:
@@ -173,7 +176,7 @@ async def execute_playbook(
             ip = target or alert.source_ip
             if not ip:
                 raise ValueError("Aucune IP cible")
-            result = await _block_ip(ip)
+            result = await _block_ip(ip, db)
  
         elif execution.playbook == PlaybookType.DISABLE_ACCOUNT.value:
             username = target or alert.username

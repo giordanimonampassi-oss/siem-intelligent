@@ -72,3 +72,9 @@ export async function getAuditLog(skip = 0, limit = 100) {
   const { data } = await client.get('/auth/audit', { params: { skip, limit } })
   return data
 }
+
+// ── Stats (AUDITOR/RSSI/ADMIN) ────────────────────────────────────────────
+export async function getAuthStats() {
+  const { data } = await client.get('/auth/stats')
+  return data
+}

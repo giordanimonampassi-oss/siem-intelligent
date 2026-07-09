@@ -53,7 +53,7 @@ const NAV_BY_ROLE = {
 export default function Sidebar({ collapsed, onToggle, alertBadge = 0 }) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
-  const role = user?.role || 'READER'
+  const role = user?.role || 'reader'
   const links = NAV_BY_ROLE[role] || NAV_BY_ROLE.READER
 
   // Initiales pour l'avatar
@@ -64,18 +64,27 @@ export default function Sidebar({ collapsed, onToggle, alertBadge = 0 }) {
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <FiShield size={20} color="#fff" />
-        </div>
-        {!collapsed && (
-          <div className="sidebar-logo-text">
-            <div className="sidebar-logo-title">Smart SIEM</div>
-            <div className="sidebar-logo-sub">CTU — SOC</div>
-          </div>
-        )}
-      </div>
+{/* Logo */}
+<div className="sidebar-logo">
+  {!collapsed ? (
+    <img 
+      src="/logo.svg" 
+      alt="Smart SIEM Logo" 
+      style={{ height: '82px', width: 'auto' }}
+    />
+  ) : (
+    <div className="sidebar-logo-icon">
+      <FiShield size={20} color="#fff" />
+    </div>
+  )}
+  
+  {!collapsed && (
+    <div className="sidebar-logo-text">
+      <div className="sidebar-logo-title">Smart SIEM</div>
+      <div className="sidebar-logo-sub">CTU — SOC</div>
+    </div>
+  )}
+</div>
 
       {/* Navigation */}
       <nav className="sidebar-nav">

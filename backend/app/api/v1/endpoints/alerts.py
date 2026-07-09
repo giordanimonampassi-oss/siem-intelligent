@@ -11,11 +11,12 @@ from api.v1.dependencies import get_db, get_current_user, require_analyst
 from models.user import CTSUser
 from schemas.alert_schemas import (
     AlertResponse, AlertListResponse, AlertStatsResponse,
-    AlertUpdateStatus, PlaybookExecutionResponse,
+    AlertUpdateStatus, PlaybookExecutionResponse, TopRuleResponse, RSSIMetricsResponse,
 )
 from services import alert_service, soar as soar_service
 from services.auth_service import log_audit
 from core.constants import LogSeverity
+from services.alert_service import get_top_rules, get_rssi_metrics
 
 router = APIRouter(prefix="/alerts", tags=["Alertes — Module 3"])
 
@@ -72,6 +73,26 @@ async def list_alerts(
         results=[AlertResponse.model_validate(a) for a in result["results"]],
     )
 
+
+@router.get("/top-rules", response_model=list[TopRuleResponse])
+async def top_rules(
+    days: int = Query(7, ge=1, le=90),
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+    current_user: CTSUser = Depends(get_current_user),
+):
+    rows = await alert_service.get_top_rules(db, days=days, limit=limit)
+    return [TopRuleResponse(**r) for r in rows]
+
+
+@router.get("/rssi-metrics", response_model=RSSIMetricsResponse)
+async def rssi_metrics(
+    days: int = Query(7, ge=1, le=90),
+    db: AsyncSession = Depends(get_db),
+    current_user: CTSUser = Depends(get_current_user),
+):
+    metrics = await alert_service.get_rssi_metrics(db, days=days)
+    return RSSIMetricsResponse(**metrics)
 
 # ─── Detail d'une alerte ─────────────────────────────────────────────────────
 

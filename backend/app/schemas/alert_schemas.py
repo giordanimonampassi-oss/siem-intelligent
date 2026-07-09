@@ -127,3 +127,17 @@ class NotificationConfigResponse(BaseModel):
  
 class NotificationTestRequest(BaseModel):
     channel: str = Field(..., description="email | webhook | sms | all")
+
+class TopRuleResponse(BaseModel):
+    rule_id: str
+    name: str
+    mitre_tactic: Optional[str]
+    mitre_technique: Optional[str]
+    count: int
+
+
+class RSSIMetricsResponse(BaseModel):
+    avg_response_seconds: Optional[float]
+    avg_confidence: Optional[float]
+    mitre_coverage_pct: float
+    ueba_coverage_pct: float

@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { reportsAPI } from '../../api/index.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { Card, Badge, EmptyState } from '../../components/ui/index.jsx'
+import { Card, EmptyState } from '../../components/ui/index.jsx'
 import Modal from '../../components/ui/Modal.jsx'
 import {
   FiFileText, FiDownload, FiPlus, FiShield, FiCheckCircle,
-  FiXCircle, FiCalendar, FiTrendingUp
+  FiXCircle, FiTrendingUp
 } from 'react-icons/fi'
 import { format } from 'date-fns'
 
@@ -18,6 +18,16 @@ const REPORT_TYPES = [
   { key: 'audit',      icon: <FiFileText /> },
 ]
 const PERIODS = ['daily', 'weekly', 'monthly', 'custom']
+
+// ── Helper : extrait un tableau quel que soit le format de réponse ──────────
+// Le backend renvoie { total, results: [...] }. On garde aussi les anciens
+// formats ({ items: [...] } ou tableau brut) par tolérance/rétrocompat.
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return null // signal d'échec explicite -> on saura qu'il faut fallback au mock
+}
 
 export default function ReportsPage() {
   const { t }       = useTranslation()
@@ -31,17 +41,24 @@ export default function ReportsPage() {
   const [genType,   setGenType]   = useState('security')
   const [genPeriod, setGenPeriod] = useState('weekly')
   const [generating,setGenerating]= useState(false)
+  const [downloadingId, setDownloadingId] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
       const [rRes, bRes] = await Promise.all([
-        reportsAPI.list().catch(() => ({ data: mockReports() })),
-        reportsAPI.getIntegrityBatches().catch(() => ({ data: mockBatches() })),
+        reportsAPI.list().catch(() => null),
+        reportsAPI.getIntegrityBatches().catch(() => null),
       ])
-      setReports(rRes.data?.items || rRes.data || mockReports())
-      setBatches(bRes.data?.items || bRes.data || mockBatches())
-    } finally { setLoading(false) }
+
+      const reportList = rRes ? extractList(rRes.data) : null
+      const batchList  = bRes ? extractList(bRes.data) : null
+
+      setReports(reportList ?? mockReports())
+      setBatches(batchList ?? mockBatches())
+    } finally {
+      setLoading(false)
+    }
   }
 
   function mockReports() {
@@ -69,17 +86,32 @@ export default function ReportsPage() {
       setGenOpen(false)
       load()
     } catch {
-      toast.success('Rapport en cours de génération…')
-      setGenOpen(false)
-    } finally { setGenerating(false) }
+      toast.error(t('common.error'))
+    } finally {
+      setGenerating(false)
+    }
   }
 
+  // ── Téléchargement réel (branché sur GET /reports/{id}/download) ─────────
   const handleDownload = async (report) => {
+    setDownloadingId(report.id)
     try {
-      toast.info('Téléchargement en cours…')
-      // En prod : reportsAPI.download(report.id) puis créer un blob
-      setTimeout(() => toast.success('Rapport téléchargé'), 800)
-    } catch { toast.error(t('common.error')) }
+      const res = await reportsAPI.download(report.id) // responseType: 'blob'
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url  = window.URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url
+      a.download = `rapport-${report.type}-${report.id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('Rapport téléchargé')
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setDownloadingId(null)
+    }
   }
 
   return (
@@ -133,8 +165,12 @@ export default function ReportsPage() {
                         {' · '}{(r.total_logs || 0).toLocaleString()} logs
                       </div>
                     </div>
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(r)}>
-                      <FiDownload size={13} /> PDF
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleDownload(r)}
+                      disabled={downloadingId === r.id}
+                    >
+                      <FiDownload size={13} /> {downloadingId === r.id ? '…' : 'PDF'}
                     </button>
                   </div>
                 )
@@ -145,36 +181,40 @@ export default function ReportsPage() {
 
         {/* Intégrité (auditeur) */}
         <Card title={<><FiShield size={14} /> {t('reports.integrityChecks')}</>}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {batches.map(b => (
-              <div key={b.id} style={{
-                padding: '10px 12px',
-                background: b.verified ? 'rgba(63,185,80,0.05)' : 'rgba(248,81,73,0.05)',
-                border: `1px solid ${b.verified ? 'rgba(63,185,80,0.2)' : 'rgba(248,81,73,0.2)'}`,
-                borderRadius: 8,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    {b.period_start ? format(new Date(b.period_start), 'dd/MM HH:mm') : ''}
-                  </span>
-                  {b.verified
-                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--sev-success)' }}>
-                        <FiCheckCircle size={12} /> {t('reports.verified')}
-                      </span>
-                    : <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--sev-critical)' }}>
-                        <FiXCircle size={12} /> {t('reports.notVerified')}
-                      </span>
-                  }
+          {batches.length === 0 ? (
+            <EmptyState icon={<FiShield size={30} />} title="Aucun lot d'intégrité" />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {batches.map(b => (
+                <div key={b.id} style={{
+                  padding: '10px 12px',
+                  background: b.verified ? 'rgba(63,185,80,0.05)' : 'rgba(248,81,73,0.05)',
+                  border: `1px solid ${b.verified ? 'rgba(63,185,80,0.2)' : 'rgba(248,81,73,0.2)'}`,
+                  borderRadius: 8,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {b.period_start ? format(new Date(b.period_start), 'dd/MM HH:mm') : ''}
+                    </span>
+                    {b.verified
+                      ? <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--sev-success)' }}>
+                          <FiCheckCircle size={12} /> {t('reports.verified')}
+                        </span>
+                      : <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--sev-critical)' }}>
+                          <FiXCircle size={12} /> {t('reports.notVerified')}
+                        </span>
+                    }
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
+                    {b.log_count?.toLocaleString()} logs
+                  </div>
+                  <code style={{ fontSize: '0.62rem', color: 'var(--text-muted)', wordBreak: 'break-all', display: 'block' }}>
+                    {b.sha256_hash}
+                  </code>
                 </div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
-                  {b.log_count?.toLocaleString()} logs
-                </div>
-                <code style={{ fontSize: '0.62rem', color: 'var(--text-muted)', wordBreak: 'break-all', display: 'block' }}>
-                  {b.sha256_hash}
-                </code>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 

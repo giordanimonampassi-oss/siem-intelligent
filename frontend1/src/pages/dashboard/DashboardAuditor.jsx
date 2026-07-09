@@ -1,44 +1,68 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { getAuditLog } from '../../api/auth.js'
-import { getBatchIntegrity } from '../../api/index.js'
-import { ingestLog } from '../../api/logs.js'
+import { getAuditLog, getAuthStats, listUsers } from '../../api/auth.js'
+import { reportsAPI } from '../../api/index.js'
 import { KpiCard, Card, Badge, EmptyState } from '../../components/ui/index.jsx'
 import { FiBook, FiShield, FiDownload, FiCheckCircle, FiAlertCircle } from 'react-icons/fi'
-import { format } from 'date-fns'
+import { format, isToday } from 'date-fns'
 import { fr, enUS } from 'date-fns/locale'
+
+// Meme helper que les autres pages — tolere {results}, {items} ou tableau brut
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return null
+}
+
+// Actions reelles loggees par log_audit() cote backend (auth_service.py,
+// alerts.py) — en anglais, pas en francais comme dans l'ancienne version.
+const ACTION_COLOR = {
+  login:               'var(--sev-success)',
+  mfa_verified:        'var(--sev-success)',
+  user_created:        'var(--sev-success)',
+  user_updated:        'var(--sev-warning)',
+  user_disabled:       'var(--sev-critical)',
+  alert_acknowledged:  'var(--accent-teal)',
+  alert_resolved:      'var(--accent-blue)',
+  soar_triggered:      'var(--sev-high)',
+}
 
 export default function DashboardAuditor() {
   const { t, i18n } = useTranslation()
   const navigate    = useNavigate()
   const locale      = i18n.language === 'fr' ? fr : enUS
 
-  const [auditLogs, setAuditLogs] = useState([])
-  const [batches,   setBatches]   = useState([])
-  const [loading,   setLoading]   = useState(true)
+  const [auditLogs,   setAuditLogs]   = useState([])
+  const [batches,     setBatches]     = useState([])
+  const [activeUsers, setActiveUsers] = useState(null)
+  const [loading,     setLoading]     = useState(true)
 
   useEffect(() => {
     Promise.all([
-      getAuditLog({ size: 10 }),
-      getBatchIntegrity({ size: 5 }).catch(() => ({ data: [] })),
-    ]).then(([auditRes, batchRes]) => {
-      setAuditLogs(auditRes.data?.items || auditRes.data || [])
-      setBatches(batchRes.data?.items || batchRes.data || [])
+      // getAuditLog(skip, limit) — signature reelle de api/auth.js
+      getAuditLog(0, 100).catch(() => []),
+      reportsAPI.getIntegrityBatches({ size: 5 }).catch(() => ({ data: [] })),
+      // /auth/stats n'apparaît pas dans le Swagger officiel — on tente, et on
+      // retombe sur un calcul via listUsers() (route confirmée) si ça échoue.
+      getAuthStats().catch(() =>
+        listUsers(0, 200)
+          .then((data) => {
+            const users = extractList(data) ?? []
+            return { active_users: users.filter((u) => u.is_active).length }
+          })
+          .catch(() => ({ active_users: null }))
+      ),
+    ]).then(([auditData, batchRes, statsData]) => {
+      setAuditLogs(extractList(auditData) ?? [])
+      setBatches(extractList(batchRes.data) ?? [])
+      setActiveUsers(statsData?.active_users ?? null)
     }).finally(() => setLoading(false))
   }, [])
 
-  const ACTION_COLOR = {
-    connexion:           'var(--sev-success)',
-    deconnexion:         'var(--text-muted)',
-    connexion_echouee:   'var(--sev-critical)',
-    creation_utilisateur:'var(--sev-success)',
-    modification_role:   'var(--sev-warning)',
-    consultation_alerte: 'var(--accent-teal)',
-    traitement_incident: 'var(--accent-blue)',
-    execution_playbook:  'var(--sev-high)',
-    export:              'var(--accent-purple)',
-  }
+  const todayCount = auditLogs.filter(l => l.created_at && isToday(new Date(l.created_at))).length
+  const recentLogs = auditLogs.slice(0, 10)
 
   return (
     <div>
@@ -65,15 +89,15 @@ export default function DashboardAuditor() {
         {t('dashboard.readOnlyNotice')} — Accès restreint aux journaux d'audit et rapports.
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — uniquement des valeurs reellement calculees */}
       <div className="kpi-grid" style={{ marginBottom: 24 }}>
         <KpiCard label="Actions auditées aujourd'hui"
-          value={auditLogs.length} color="teal" icon={<FiBook />} />
+          value={todayCount} color="teal" icon={<FiBook />} />
         <KpiCard label="Vérifications d'intégrité"
           value={`${batches.filter(b => b.verified).length} / ${batches.length}`}
           color="success" icon={<FiShield />} />
-        <KpiCard label="Logs exportés ce mois" value="847" color="info" />
-        <KpiCard label="Utilisateurs actifs" value="12" color="teal" />
+        <KpiCard label="Utilisateurs actifs"
+          value={activeUsers ?? '—'} color="teal" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
@@ -100,9 +124,9 @@ export default function DashboardAuditor() {
               <tbody>
                 {loading
                   ? <tr><td colSpan={5} className="table-empty">{t('common.loading')}</td></tr>
-                  : auditLogs.length === 0
+                  : recentLogs.length === 0
                     ? <tr><td colSpan={5}><EmptyState title="Aucune entrée d'audit" /></td></tr>
-                    : auditLogs.map(log => (
+                    : recentLogs.map(log => (
                       <tr key={log.id}>
                         <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono' }}>
                           {log.created_at ? format(new Date(log.created_at), 'dd/MM HH:mm:ss') : '—'}
