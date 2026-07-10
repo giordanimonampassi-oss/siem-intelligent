@@ -276,7 +276,6 @@ const handleToggleActive = async (user) => {
 }
 
 
-// ════════════════════════════════════════════════════════════════════════════
 // Remplace entierement la fonction RulesTab() par celle-ci
 function RulesTab() {
   const { t } = useTranslation()
@@ -284,6 +283,7 @@ function RulesTab() {
   const [rules, setRules] = useState([])
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [form, setForm] = useState({
     name: '', description: '', rule_type: 'THRESHOLD',
     mitre_tactic: '', mitre_technique: '', threshold: 5, time_window_sec: 60,
@@ -332,6 +332,19 @@ function RulesTab() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await rulesApiReal.delete(deleteTarget.id)
+      toast.success('Règle supprimée')
+      setRules(prev => prev.filter(r => r.id !== deleteTarget.id))
+    } catch (err) {
+      toast.error(err.response?.data?.detail || t('common.error'))
+    } finally {
+      setDeleteTarget(null)
+    }
+  }
+
   return (
     <>
       <Card
@@ -348,7 +361,7 @@ function RulesTab() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr><th>Nom</th><th>Type</th><th>MITRE</th><th>Seuil</th><th>Actif</th></tr>
+                <tr><th>Nom</th><th>Type</th><th>MITRE</th><th>Seuil</th><th>Actif</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {rules.map(r => (
@@ -366,6 +379,15 @@ function RulesTab() {
                         {r.is_active
                           ? <FiToggleRight size={18} color="var(--sev-success)" />
                           : <FiToggleLeft size={18} color="var(--text-muted)" />}
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-ghost btn-icon btn-sm"
+                        onClick={() => setDeleteTarget(r)}
+                        title="Supprimer la règle"
+                      >
+                        <FiTrash2 size={14} color="var(--sev-critical)" />
                       </button>
                     </td>
                   </tr>
@@ -447,6 +469,16 @@ function RulesTab() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Supprimer cette règle ?"
+        message={deleteTarget ? `« ${deleteTarget.name} » sera définitivement supprimée. Cette action est irréversible.` : ''}
+        confirmLabel="Supprimer"
+        type="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   )
 }
@@ -497,15 +529,6 @@ function RetentionTab() {
           {t('settings.purgeNow')}
         </button>
       </Card>
-
-      <ConfirmDialog
-        isOpen={confirmPurge}
-        title={t('settings.purgeNow')}
-        message={t('settings.confirmPurge')}
-        type="danger"
-        onConfirm={handlePurge}
-        onCancel={() => setConfirmPurge(false)}
-      />
     </>
   )
 }

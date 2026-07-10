@@ -1,44 +1,80 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { login } from '../../api/auth.js'
+import { getAuditLog } from '../../api/auth.js'
 import { useToast } from '../../context/ToastContext.jsx'
 import { Card, EmptyState, Pagination } from '../../components/ui/index.jsx'
 import { FiBook, FiDownload, FiFilter, FiCheckCircle, FiAlertCircle } from 'react-icons/fi'
 import { format } from 'date-fns'
 
-const ACTIONS = ['', 'connexion', 'deconnexion', 'connexion_echouee',
-  'creation_utilisateur', 'modification_role', 'consultation_alerte',
-  'traitement_incident', 'execution_playbook', 'export']
+// Actions réellement loggées par log_audit() côté backend (auth_service.py,
+// alerts.py, logs.py) — en anglais, pas en français. Cohérent avec
+// DashboardAuditor.jsx.
+const ACTIONS = ['', 'login', 'mfa_verified', 'user_created', 'user_updated',
+  'user_disabled', 'log_ingested', 'batch_ingested', 'log_flagged',
+  'alert_acknowledged', 'alert_resolved', 'soar_triggered']
+
+const ACTION_COLOR = {
+  login:               'var(--sev-success)',
+  mfa_verified:        'var(--sev-success)',
+  user_created:        'var(--sev-success)',
+  user_updated:        'var(--sev-warning)',
+  user_disabled:       'var(--sev-critical)',
+  log_ingested:        'var(--text-muted)',
+  batch_ingested:      'var(--text-muted)',
+  log_flagged:         'var(--sev-warning)',
+  alert_acknowledged:  'var(--accent-teal)',
+  alert_resolved:      'var(--accent-blue)',
+  soar_triggered:      'var(--sev-high)',
+}
+
+// Même helper que les autres pages — tolère {results}, {items} ou tableau brut
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.items)) return payload.items
+  return []
+}
 
 export default function AuditPage() {
   const { t }   = useTranslation()
   const toast   = useToast()
-  const [logs,    setLogs]    = useState([])
+  const [allLogs, setAllLogs] = useState([])
   const [loading, setLoading] = useState(true)
-  const [total,   setTotal]   = useState(0)
   const [page,    setPage]    = useState(1)
   const [action,  setAction]  = useState('')
   const [username,setUsername]= useState('')
   const SIZE = 25
 
-  const load = async (p = 1) => {
+  // Pas de filtre serveur confirmé par action/username sur GET /auth/audit —
+  // on charge une fenêtre large une fois, puis on filtre/pagine côté client.
+  const load = async () => {
     setLoading(true)
     try {
-      const params = { page: p, size: SIZE }
-      if (action) params.action = action
-      if (username) params.username = username
-      const { data } = await authAPI.getAuditLog(params)
-      setLogs(data.items || data || [])
-      setTotal(data.total || (data.items || data || []).length)
-    } catch { toast.error(t('common.error')) }
-    finally { setLoading(false) }
+      const data = await getAuditLog(0, 500)
+      setAllLogs(extractList(data))
+    } catch {
+      toast.error(t('common.error'))
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { load(1) }, [action])
+  useEffect(() => { load() }, [])
+
+  const filtered = allLogs.filter(l => {
+    if (action && l.action !== action) return false
+    if (username && !(l.username || '').toLowerCase().includes(username.toLowerCase())) return false
+    return true
+  })
+
+  const total = filtered.length
+  const logs  = filtered.slice((page - 1) * SIZE, page * SIZE)
+
+  const applyFilters = () => setPage(1)
 
   const exportCSV = () => {
     const header = 'timestamp,username,action,target,result\n'
-    const rows = logs.map(l =>
+    const rows = filtered.map(l =>
       `"${l.created_at}","${l.username || ''}","${l.action}","${l.target || ''}","${l.result}"`
     ).join('\n')
     const blob = new Blob([header + rows], { type: 'text/csv' })
@@ -48,18 +84,6 @@ export default function AuditPage() {
     a.click()
     URL.revokeObjectURL(url)
     toast.success('Export téléchargé')
-  }
-
-  const ACTION_COLOR = {
-    connexion: 'var(--sev-success)',
-    deconnexion: 'var(--text-muted)',
-    connexion_echouee: 'var(--sev-critical)',
-    creation_utilisateur: 'var(--sev-success)',
-    modification_role: 'var(--sev-warning)',
-    consultation_alerte: 'var(--accent-teal)',
-    traitement_incident: 'var(--accent-blue)',
-    execution_playbook: 'var(--sev-high)',
-    export: 'var(--accent-purple)',
   }
 
   return (
@@ -79,16 +103,16 @@ export default function AuditPage() {
           <div style={{ flex: '1 1 200px' }}>
             <label className="form-label">Utilisateur</label>
             <input className="input" value={username} onChange={e => setUsername(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && load(1)} placeholder="Rechercher…" />
+              onKeyDown={e => e.key === 'Enter' && applyFilters()} placeholder="Rechercher…" />
           </div>
           <div style={{ flex: '1 1 200px' }}>
             <label className="form-label">Action</label>
-            <select className="select" value={action} onChange={e => setAction(e.target.value)}>
+            <select className="select" value={action} onChange={e => { setAction(e.target.value); setPage(1) }}>
               {ACTIONS.map(a => <option key={a} value={a}>{a || t('common.all')}</option>)}
             </select>
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
-            <button className="btn btn-primary" onClick={() => load(1)}>
+            <button className="btn btn-primary" onClick={applyFilters}>
               <FiFilter size={14} /> {t('common.apply')}
             </button>
           </div>
@@ -136,7 +160,7 @@ export default function AuditPage() {
                 </tbody>
               </table>
             </div>
-            <Pagination page={page} total={total} size={SIZE} onChange={p => { setPage(p); load(p) }} />
+            <Pagination page={page} total={total} size={SIZE} onChange={p => setPage(p)} />
           </>
         )}
       </Card>

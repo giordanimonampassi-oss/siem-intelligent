@@ -20,18 +20,20 @@ const REPORT_TYPES = [
 const PERIODS = ['daily', 'weekly', 'monthly', 'custom']
 
 // ── Helper : extrait un tableau quel que soit le format de réponse ──────────
-// Le backend renvoie { total, results: [...] }. On garde aussi les anciens
-// formats ({ items: [...] } ou tableau brut) par tolérance/rétrocompat.
 function extractList(payload) {
   if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.results)) return payload.results
   if (Array.isArray(payload?.items)) return payload.items
-  return null // signal d'échec explicite -> on saura qu'il faut fallback au mock
+  return null
 }
 
 export default function ReportsPage() {
   const { t }       = useTranslation()
-  const { isAnalyst, isRSSI, isAuditor } = useAuth()
+  // require_analyst côté backend n'autorise que ANALYST et ADMIN — PAS RSSI.
+  // Le bouton doit refléter exactement cette règle, sinon un RSSI voit un
+  // bouton qui échouera systématiquement avec 403.
+  const { isAnalyst, isAdmin, isRSSI, isAuditor } = useAuth()
+  const canGenerate = isAnalyst || isAdmin
   const toast        = useToast()
 
   const [reports,   setReports]   = useState([])
@@ -40,6 +42,8 @@ export default function ReportsPage() {
   const [genOpen,   setGenOpen]   = useState(false)
   const [genType,   setGenType]   = useState('security')
   const [genPeriod, setGenPeriod] = useState('weekly')
+  const [genDateFrom, setGenDateFrom] = useState('')
+  const [genDateTo,   setGenDateTo]   = useState('')
   const [generating,setGenerating]= useState(false)
   const [downloadingId, setDownloadingId] = useState(null)
 
@@ -79,14 +83,25 @@ export default function ReportsPage() {
   useEffect(() => { load() }, [])
 
   const handleGenerate = async () => {
+    if (genPeriod === 'custom' && (!genDateFrom || !genDateTo)) {
+      toast.error('Sélectionnez une date de début et de fin pour une période personnalisée')
+      return
+    }
     setGenerating(true)
     try {
-      await reportsAPI.generate(genType, genPeriod)
+      const dateFrom = genPeriod === 'custom' ? new Date(genDateFrom).toISOString() : null
+      const dateTo   = genPeriod === 'custom' ? new Date(genDateTo).toISOString()   : null
+      await reportsAPI.generate(genType, genPeriod, dateFrom, dateTo)
       toast.success(t('reports.generate') + ' — OK')
       setGenOpen(false)
+      setGenDateFrom('')
+      setGenDateTo('')
       load()
-    } catch {
-      toast.error(t('common.error'))
+    } catch (err) {
+      const msg = err.response?.status === 403
+        ? "Seuls les rôles Analyste ou Administrateur peuvent générer un rapport."
+        : (err.response?.data?.detail || t('common.error'))
+      toast.error(msg)
     } finally {
       setGenerating(false)
     }
@@ -121,12 +136,10 @@ export default function ReportsPage() {
           <h1 className="page-title">{t('reports.title')}</h1>
           <p className="page-subtitle">Rapports de sécurité, conformité et audit</p>
         </div>
-        {/* {(isAnalyst || isRSSI) && (
+        {canGenerate && (
           <button className="btn btn-primary btn-sm" onClick={() => setGenOpen(true)}>
             <FiPlus size={14} /> {t('reports.generate')}
-          </button> */}
-          {(isAnalyst || isRSSI) && (
-  <button className="btn btn-primary btn-sm" onClick={() => setGenOpen(true)}></button>
+          </button>
         )}
       </div>
 
@@ -262,6 +275,30 @@ export default function ReportsPage() {
             ))}
           </select>
         </div>
+
+        {/* Période personnalisée : sans ces champs, "custom" retombait
+            silencieusement sur 7 jours côté backend (PERIOD_DELTAS ne
+            connaît pas "custom"). */}
+        {genPeriod === 'custom' && (
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Du</label>
+              <input
+                type="date" className="input"
+                value={genDateFrom}
+                onChange={(e) => setGenDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Au</label>
+              <input
+                type="date" className="input"
+                value={genDateTo}
+                onChange={(e) => setGenDateTo(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
 
         <div style={{
           display: 'flex', gap: 8, alignItems: 'center',
