@@ -141,3 +141,42 @@ class RSSIMetricsResponse(BaseModel):
     avg_confidence: Optional[float]
     mitre_coverage_pct: float
     ueba_coverage_pct: float
+
+class PlaybookCreate(BaseModel):
+    name: str = Field(..., min_length=3, max_length=255)
+    description: Optional[str] = None
+    mode: str = "auto"
+    max_delay_sec: int = 60
+    severity_filter: Optional[str] = None
+    actions: Optional[List[str]] = None
+    channels: Optional[List[str]] = None
+    is_active: bool = True
+
+
+class PlaybookUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    mode: Optional[str] = None
+    max_delay_sec: Optional[int] = None
+    severity_filter: Optional[str] = None
+    actions: Optional[List[str]] = None
+    channels: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+
+class PlaybookResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: Optional[str]
+    mode: str
+    max_delay_sec: int
+    severity_filter: Optional[str]
+    actions: Optional[List[str]]
+    channels: Optional[List[str]]
+    is_active: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class PlaybookDetailResponse(PlaybookResponse):
+    recent_executions: List[PlaybookExecutionResponse] = []

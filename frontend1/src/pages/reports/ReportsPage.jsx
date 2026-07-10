@@ -121,10 +121,12 @@ export default function ReportsPage() {
           <h1 className="page-title">{t('reports.title')}</h1>
           <p className="page-subtitle">Rapports de sécurité, conformité et audit</p>
         </div>
-        {(isAnalyst || isRSSI) && (
+        {/* {(isAnalyst || isRSSI) && (
           <button className="btn btn-primary btn-sm" onClick={() => setGenOpen(true)}>
             <FiPlus size={14} /> {t('reports.generate')}
-          </button>
+          </button> */}
+          {(isAnalyst || isRSSI) && (
+  <button className="btn btn-primary btn-sm" onClick={() => setGenOpen(true)}></button>
         )}
       </div>
 

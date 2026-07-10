@@ -1,13 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { login, verifyMfa, setupMfa, confirmMfa } from '../api/auth.js'
+import {FiPlus} from 'react-icons/fi'
+import { useTranslation } from 'react-i18next'
+// import { useAuth } from '../../context/AuthContext.jsx'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
+  const { t } = useTranslation()
   const [user,        setUser]        = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [authView,    setAuthView]    = useState('login')
   const [tempToken,   setTempToken]   = useState(null)
+
+// const { user } = useAuth()
+const canGenerate = ['analyst', 'rssi', 'admin'].includes((user?.role || '').toLowerCase())
+// ...
+{canGenerate && (
+  <button className="btn btn-primary btn-sm" onClick={() => setGenOpen(true)}>
+    <FiPlus size={14} /> {t('reports.generate')}
+  </button>
+)}
 
   // Chargement initial
   useEffect(() => {
@@ -106,7 +119,7 @@ export function AuthProvider({ children }) {
     initMfaSetup,
     completeMfaSetup,
     logout,
-    isAdmin: user?.role === 'ADMIN',
+    isAdmin: user?.role === 'admin',
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

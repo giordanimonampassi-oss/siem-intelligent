@@ -6,6 +6,8 @@ import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import case, func
+from datetime import timedelta
 
 from api.v1.dependencies import get_db, get_current_user, require_analyst
 from models.user import CTSUser
@@ -93,6 +95,33 @@ async def rssi_metrics(
 ):
     metrics = await alert_service.get_rssi_metrics(db, days=days)
     return RSSIMetricsResponse(**metrics)
+
+@router.get("/trend")
+async def alerts_trend(
+    days: int = Query(30, ge=1, le=90),
+    db: AsyncSession = Depends(get_db),
+    current_user: CTSUser = Depends(get_current_user),
+):
+    """Volume d'alertes et d'incidents (CRITICAL) par jour, vrai GROUP BY."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (await db.execute(
+        select(
+            func.date(Alert.triggered_at).label("day"),
+            func.count(Alert.id).label("alerts"),
+            func.sum(case((Alert.severity == "CRITICAL", 1), else_=0)).label("incidents"),
+        )
+        .where(Alert.triggered_at >= since)
+        .group_by(func.date(Alert.triggered_at))
+        .order_by(func.date(Alert.triggered_at))
+    )).all()
+
+    by_day = {str(r.day): {"alerts": r.alerts, "incidents": int(r.incidents or 0)} for r in rows}
+    result = []
+    for i in range(days):
+        d = (since + timedelta(days=i + 1)).date()
+        entry = by_day.get(str(d), {"alerts": 0, "incidents": 0})
+        result.append({"day": d.strftime("%d/%m"), **entry})
+    return result
 
 # ─── Detail d'une alerte ─────────────────────────────────────────────────────
 

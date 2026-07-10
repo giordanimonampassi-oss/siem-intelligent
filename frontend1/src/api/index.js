@@ -40,6 +40,10 @@ export const alertsAPI = {
 
   getRSSIMetrics: (days = 7) =>
   client.get('/alerts/rssi-metrics', { params: { days } }),
+
+  getTrend: (days = 30) => client.get('/alerts/trend', { params: { days } }),
+  // dans playbooksAPI
+  delete: (id) => client.delete(`/playbooks/${id}`),
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -246,6 +250,11 @@ export const playbooksAPI = {
     if (status) all = all.filter((e) => e.status === status)
     return { data: all.slice(0, size) }
   },
+
+  listCatalog: () => client.get('/playbooks'),
+  create: (payload) => client.post('/playbooks', payload),
+  getDetail: (id) => client.get(`/playbooks/${id}`),
+  update: (id, payload) => client.patch(`/playbooks/${id}`, payload),
 }
  
 // ── UEBA ──────────────────────────────────────────────────────────────────

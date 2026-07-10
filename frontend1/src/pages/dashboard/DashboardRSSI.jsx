@@ -26,6 +26,9 @@ export default function DashboardRSSI() {
   const [metrics,  setMetrics]  = useState({})
   const [topRules, setTopRules] = useState([])
   const [loading,  setLoading]  = useState(true)
+  const [trend, setTrend] = useState([])
+  alertsAPI.getTrend(30).catch(() => ({ data: [] })),
+  setTrend(rRes.data || [])
 
   useEffect(() => {
     Promise.all([
@@ -94,8 +97,8 @@ export default function DashboardRSSI() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Tendance incidents — pas d'endpoint "incidents par jour" encore construit */}
-        <Card title="Évolution des incidents — 30 jours (exemple)">
-          <IncidentsTrendChart />
+        <Card title="Évolution des incidents — 30 jours">
+          <IncidentsTrendChart data={trend} />
         </Card>
 
         {/* Gauges — desormais reelles pour MITRE et UEBA */}

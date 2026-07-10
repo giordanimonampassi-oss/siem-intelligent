@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const { t } = useTranslation()
   const toast = useToast()
   const [tab, setTab] = useState('users')
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   return (
     <div>
@@ -276,17 +277,27 @@ const handleToggleActive = async (user) => {
 
 
 // ════════════════════════════════════════════════════════════════════════════
+// Remplace entierement la fonction RulesTab() par celle-ci
 function RulesTab() {
   const { t } = useTranslation()
   const toast = useToast()
   const [rules, setRules] = useState([])
   const [loading, setLoading] = useState(true)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [form, setForm] = useState({
+    name: '', description: '', rule_type: 'THRESHOLD',
+    mitre_tactic: '', mitre_technique: '', threshold: 5, time_window_sec: 60,
+    alert_level: 'WARNING', confidence_score: 0.8, is_active: true,
+  })
 
-  useEffect(() => {
-    rulesApiReal.list().then(r => setRules(r.data.items || r.data || mockRules()))
+  const load = () => {
+    setLoading(true)
+    rulesApiReal.list().then(r => setRules(r.data.results || r.data.items || r.data || mockRules()))
       .catch(() => setRules(mockRules()))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
 
   function mockRules() {
     return [
@@ -299,47 +310,144 @@ function RulesTab() {
 
   const toggleRule = async (rule) => {
     try {
-      await rulesApiReal.toggle(rule.id, !rule.is_active)
+      await rulesApiReal.toggle(rule.id)
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_active: !r.is_active } : r))
       toast.success('Règle mise à jour')
     } catch { toast.error(t('common.error')) }
   }
 
+  const handleCreate = async () => {
+    try {
+      await rulesApiReal.create({
+        ...form,
+        mitre_tactic: form.mitre_tactic || null,
+        mitre_technique: form.mitre_technique || null,
+      })
+      toast.success('Règle créée')
+      setCreateOpen(false)
+      setForm({ name: '', description: '', rule_type: 'THRESHOLD', mitre_tactic: '', mitre_technique: '', threshold: 5, time_window_sec: 60, alert_level: 'WARNING', confidence_score: 0.8, is_active: true })
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || t('common.error'))
+    }
+  }
+
   return (
-    <Card title={<><FiSliders size={14} /> {t('settings.rules')}</>}>
-      {loading ? (
-        <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>{t('common.loading')}</div>
-      ) : (
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr><th>Nom</th><th>Type</th><th>MITRE</th><th>Seuil</th><th>Actif</th></tr>
-            </thead>
-            <tbody>
-              {rules.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td><Badge value={r.rule_type} /></td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    {r.mitre_tactic} · {r.mitre_technique}
-                  </td>
-                  <td style={{ fontSize: '0.8rem' }}>
-                    {r.threshold ? `${r.threshold} / ${r.window_seconds}s` : '—'}
-                  </td>
-                  <td>
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => toggleRule(r)}>
-                      {r.is_active
-                        ? <FiToggleRight size={18} color="var(--sev-success)" />
-                        : <FiToggleLeft size={18} color="var(--text-muted)" />}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <>
+      <Card
+        title={<><FiSliders size={14} /> {t('settings.rules')}</>}
+        actions={
+          <button className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>
+            <FiPlus size={14} /> Nouvelle règle
+          </button>
+        }
+      >
+        {loading ? (
+          <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Nom</th><th>Type</th><th>MITRE</th><th>Seuil</th><th>Actif</th></tr>
+              </thead>
+              <tbody>
+                {rules.map(r => (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
+                    <td><Badge value={r.rule_type} /></td>
+                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      {r.mitre_tactic} · {r.mitre_technique}
+                    </td>
+                    <td style={{ fontSize: '0.8rem' }}>
+                      {r.threshold ? `${r.threshold} / ${r.time_window_sec || r.window_seconds}s` : '—'}
+                    </td>
+                    <td>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => toggleRule(r)}>
+                        {r.is_active
+                          ? <FiToggleRight size={18} color="var(--sev-success)" />
+                          : <FiToggleLeft size={18} color="var(--text-muted)" />}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Modal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Nouvelle règle de corrélation"
+        footer={
+          <>
+            <button className="btn btn-secondary" onClick={() => setCreateOpen(false)}>Annuler</button>
+            <button className="btn btn-primary" onClick={handleCreate} disabled={!form.name}>Créer</button>
+          </>
+        }
+      >
+        <div className="form-group">
+          <label>Nom</label>
+          <input className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
         </div>
-      )}
-    </Card>
+        <div className="form-group">
+          <label>Description</label>
+          <input className="input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+        </div>
+        <div className="form-group">
+          <label>Type de règle</label>
+          <select className="select" value={form.rule_type} onChange={e => setForm(f => ({ ...f, rule_type: e.target.value }))}>
+            <option value="THRESHOLD">Seuil (threshold)</option>
+            <option value="SEQUENCE">Séquentielle (pattern)</option>
+            <option value="AGGREGATION">Agrégation</option>
+            <option value="ANOMALY">Anomalie</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Tactique MITRE</label>
+            <input className="input" value={form.mitre_tactic} placeholder="ex: Initial Access"
+              onChange={e => setForm(f => ({ ...f, mitre_tactic: e.target.value }))} />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Technique MITRE</label>
+            <input className="input" value={form.mitre_technique} placeholder="ex: T1110"
+              onChange={e => setForm(f => ({ ...f, mitre_technique: e.target.value }))} />
+          </div>
+        </div>
+        {form.rule_type === 'THRESHOLD' && (
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label>Seuil (nb événements)</label>
+              <input className="input" type="number" min={1} value={form.threshold}
+                onChange={e => setForm(f => ({ ...f, threshold: Number(e.target.value) }))} />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label>Fenêtre (secondes)</label>
+              <input className="input" type="number" min={5} value={form.time_window_sec}
+                onChange={e => setForm(f => ({ ...f, time_window_sec: Number(e.target.value) }))} />
+            </div>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Niveau d'alerte</label>
+            <select className="select" value={form.alert_level} onChange={e => setForm(f => ({ ...f, alert_level: e.target.value }))}>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="HIGH">HIGH</option>
+              <option value="CRITICAL">CRITICAL</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Score de confiance</label>
+            <input className="input" type="number" min={0} max={1} step={0.05} value={form.confidence_score}
+              onChange={e => setForm(f => ({ ...f, confidence_score: Number(e.target.value) }))} />
+          </div>
+        </div>
+      </Modal>
+    </>
   )
 }
 
