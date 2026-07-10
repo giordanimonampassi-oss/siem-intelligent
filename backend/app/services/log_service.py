@@ -127,8 +127,11 @@ async def search_logs_pg(
     if params.from_dt:    filters.append(LogEntry.timestamp >= params.from_dt)
     if params.to_dt:      filters.append(LogEntry.timestamp <= params.to_dt)
     # if params.keyword:    filters.append(LogEntry.raw_message.ilike(f"%{params.keyword}%"))
-    if params.keyword and params.keyword.strip(): keyword = f"%{params.keyword.strip()}%"
-    filters.append(LogEntry.raw_message.ilike(keyword))
+    # if params.keyword and params.keyword.strip(): keyword = f"%{params.keyword.strip()}%"
+    # filters.append(LogEntry.raw_message.ilike(keyword))
+    if params.keyword and params.keyword.strip():
+        keyword_pattern = f"%{params.keyword.strip()}%"
+        filters.append(LogEntry.raw_message.ilike(keyword_pattern))
 
     base_q = select(LogEntry)
     if filters:
