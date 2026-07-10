@@ -58,6 +58,41 @@ services:
         condition: service_healthy
     volumes:
       - ..:/app
+  # À AJOUTER dans docker-compose.yml, dans la section "services:"
+# (adaptez le chemin "context" si votre dossier frontend n'est pas
+#  au même niveau que "backend/docker" — j'ai supposé une structure
+#  siem-intelligent/backend/docker/ et siem-intelligent/frontend1/)
+
+  # ─── Frontend (Vite/React) ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend1
+      dockerfile: Dockerfile
+    container_name: siem_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../../frontend1:/app
+      - /app/node_modules   # évite d'écraser node_modules du conteneur par celui de l'hôte
+    environment:
+      - CHOKIDAR_USEPOLLING=true   # nécessaire pour le hot-reload dans certains environnements Docker (Windows/WSL2 notamment)
+    depends_on:
+      - siem_api
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Point important à vérifier dans src/api/client.js :
+#
+#   Le frontend doit appeler http://localhost:8000 (le port mappé sur l'HÔTE),
+#   PAS http://siem_api:8000 (nom du service, valable uniquement ENTRE
+#   conteneurs sur le réseau Docker interne). Le navigateur de vos camarades
+#   tourne sur leur machine hôte, pas dans le réseau Docker — donc il doit
+#   viser localhost:8000, exactement comme si le backend tournait nativement.
+#
+#   Si client.js a une URL en dur (http://localhost:8000), c'est déjà bon.
+#   Si elle vient d'une variable d'environnement Vite (import.meta.env.VITE_API_URL),
+#   ajoutez dans un fichier .env à la racine de frontend1/ :
+#     VITE_API_URL=http://localhost:8000
+# ─────────────────────────────────────────────────────────────────────────────
 
 volumes:
   pg_data:
